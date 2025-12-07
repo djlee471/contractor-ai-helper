@@ -11,8 +11,9 @@ __pycache__/
 venv/
 ENV/
 
-# Streamlit
-.streamlit/
+# Streamlit files to ignore (do NOT ignore the whole directory)
+.streamlit/secrets.toml
+.streamlit/credentials.toml
 
 # OS stuff
 .DS_Store
