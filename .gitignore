@@ -1,0 +1,29 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+
+# Virtual environments
+.env
+.venv
+venv/
+ENV/
+
+# Streamlit
+.streamlit/
+
+# OS stuff
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
+
+# User files (uploaded estimates, etc)
+uploads/
+tmp/

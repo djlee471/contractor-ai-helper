@@ -1,0 +1,925 @@
+import os
+from typing import Optional, Dict, List
+
+import streamlit as st
+from openai import OpenAI
+from dotenv import load_dotenv   # for local .env support
+
+# ======================
+# Load environment variables
+# ======================
+
+# Loads variables from a local .env file if it exists (for local dev).
+# On Streamlit Cloud, .env is not used, but OPENAI_API_KEY will be provided
+# via Secrets and still show up in os.getenv().
+load_dotenv()
+
+# ======================
+# Streamlit config
+# ======================
+
+
+st.set_page_config(
+    page_title="Home Repair Helper",
+    page_icon="🛠️",
+    layout="wide",
+)
+
+# Hide the sidebar collapse/expand button (and its stray text)
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ==================
+# FONTS and colors
+# ==================
+
+st.markdown("""
+<style>
+/* Load Poppins from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+/* Apply Poppins to literally everything */
+html, body, div, span, input, textarea, button, select, label, p, h1, h2, h3, h4, h5, h6, [class], * {
+    font-family: "Poppins", sans-serif !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown("""
+<style>
+/* Main page title stays blue from the theme; 
+   use teal as a secondary accent for smaller headings */
+h2 {
+    color: #1D4ED8 !important;   /* rich blue for section headings */
+}
+
+h3 {
+    color: #0D9488 !important;   /* teal for subheadings */
+}
+
+/* Make the st.info box a little softer + more readable */
+[data-testid="stAlert"] {
+    background-color: #E0F2FE !important;  /* lighter blue fill */
+    border-color: #60A5FA !important;
+    color: #0F172A !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
+# ======================
+# OpenAI client helper
+# ======================
+
+def get_openai_client() -> OpenAI:
+    """
+    Get an OpenAI client using the OPENAI_API_KEY environment variable.
+
+    Works in two setups:
+    - Local: you put OPENAI_API_KEY in a .env file and we load it via python-dotenv.
+    - Streamlit Cloud: you set OPENAI_API_KEY in Streamlit Secrets, which populates
+      the environment automatically (no .env needed).
+
+    Contractors can deploy their own copy by setting their own OPENAI_API_KEY
+    in their environment or Streamlit Secrets without changing the code.
+    """
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        st.error(
+            "⚠️ OpenAI API key not found. "
+            "Please set `OPENAI_API_KEY` in a .env file (for local use) "
+            "or in Streamlit Secrets / environment variables."
+        )
+        st.stop()
+    return OpenAI(api_key=api_key)
+
+
+if "openai_client" not in st.session_state:
+    st.session_state["openai_client"] = get_openai_client()
+
+client: OpenAI = st.session_state["openai_client"]
+
+# ======================
+# Language config
+# ======================
+
+SUPPORTED_LANGUAGES = [
+    {"label": "English", "code": "en", "is_default": True},
+    {"label": "Español", "code": "es", "is_default": False},
+]
+
+def get_preferred_language() -> Dict:
+    language_labels = [lang["label"] for lang in SUPPORTED_LANGUAGES]
+    default_index = next(
+        i for i, lang in enumerate(SUPPORTED_LANGUAGES) if lang["is_default"]
+    )
+    preferred_label = st.selectbox(
+        "",
+        language_labels,
+        index=default_index,
+    )
+    return next(lang for lang in SUPPORTED_LANGUAGES if lang["label"] == preferred_label)
+
+
+# ======================
+# Disclaimers
+# ======================
+
+BASE_DISCLAIMER_EN = """
+**Important:** This assistant only provides general educational information.
+It does **not** provide professional insurance, legal, or construction advice.
+Your insurance company, policy documents, and your contractor’s written plan
+are the final authority. If anything here seems different from what they told you,
+use this only to help you ask them follow-up questions.
+"""
+
+BASE_DISCLAIMER_ES = """
+**Importante:** Este asistente solo proporciona información general y educativa.
+No ofrece asesoría profesional de seguros, legal ni de construcción.
+Su compañía de seguros, sus pólizas y el plan escrito de su contratista
+son la autoridad final. Si algo aquí parece diferente a lo que ellos le dijeron,
+use esto solo como ayuda para hacerles preguntas de seguimiento.
+"""
+
+AGENT_A_DISCLAIMER_EN = """
+This tool can help explain estimates and suggest neutral questions.
+It cannot say whether an item should be covered or whether an estimate is correct.
+Always rely on your adjuster’s and contractor’s written explanations.
+"""
+
+AGENT_A_DISCLAIMER_ES = """
+Esta herramienta puede ayudar a explicar estimados y sugerir preguntas neutrales.
+No puede decir si algo debería estar cubierto ni si un estimado es correcto.
+Siempre confíe en las explicaciones escritas de su ajustador y contratista.
+"""
+
+AGENT_B_DISCLAIMER_EN = """
+This tool suggests typical sequences for repair projects.
+Your contractor may choose a different order based on your home and local rules.
+Always follow your contractor’s documented plan if it differs.
+"""
+
+AGENT_B_DISCLAIMER_ES = """
+Esta herramienta sugiere secuencias típicas para proyectos de reparación.
+Su contratista puede elegir un orden diferente según su casa y las normas locales.
+Siempre siga el plan documentado de su contratista si es diferente.
+"""
+
+AGENT_C_DISCLAIMER_EN = """
+This tool gives general design suggestions only.
+Colors and materials can look very different in real lighting.
+Always rely on physical samples in your home and your contractor’s or designer’s advice
+for final decisions.
+"""
+
+AGENT_C_DISCLAIMER_ES = """
+Esta herramienta solo ofrece sugerencias generales de diseño.
+Los colores y materiales pueden verse muy diferentes con la luz real de su casa.
+Para las decisiones finales, siempre confíe en las muestras físicas en su hogar
+y en los consejos de su contratista o diseñador.
+"""
+
+
+# ======================
+# OpenAI helpers
+# ======================
+
+def call_gpt(system_prompt: str, user_content: str,
+             max_output_tokens: int = 800,
+             temperature: float = 0.4) -> str:
+    """
+    Call the OpenAI Responses API with:
+    - system_prompt as `instructions`
+    - user_content as `input` (string)
+
+    Uses a moderately small max_output_tokens to help stay within budget.
+    """
+    response = client.responses.create(
+        model="gpt-4.1-mini",  # you can bump up if you want more power
+        instructions=system_prompt,
+        input=user_content,
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+        store=False,  # do not store conversation server-side
+    )
+    return response.output_text
+
+
+def translate_if_needed(text_english: str, target_lang_code: str) -> Optional[str]:
+    """
+    Translate English -> Spanish (for now). English remains the primary reference.
+    """
+    if target_lang_code == "en":
+        return None
+    if target_lang_code != "es":
+        # Only EN + ES for now
+        return None
+
+    translation_instructions = """
+You are a careful translator.
+Translate the following text from English to neutral, clear Spanish.
+- Preserve headings, bullet points, and formatting.
+- Do NOT add new advice or change the meaning.
+- If a technical term has no good translation, keep the English in parentheses.
+""".strip()
+
+    translated = client.responses.create(
+        model="gpt-4.1-mini",
+        instructions=translation_instructions,
+        input=text_english,
+        max_output_tokens=900,
+        temperature=0.2,
+        store=False,
+    )
+    return translated.output_text
+
+
+# ======================
+# File text extraction helper (very simple placeholder)
+# ======================
+
+def extract_text_from_files(files) -> str:
+    """
+    Minimal placeholder:
+    - Tries to decode as UTF-8 (works for some PDFs and text-like files).
+    - For real deployment, you’ll want proper PDF parsing and OCR for images.
+    """
+    texts: List[str] = []
+    for f in files:
+        try:
+            content = f.read()
+            texts.append(content.decode("utf-8", errors="ignore"))
+        except Exception:
+            texts.append("[Could not decode this file as text]")
+    return "\n\n---\n\n".join(texts)
+
+
+# ======================
+# Mini-Agent A: Estimate Explainer
+# ======================
+
+def build_estimate_system_prompt() -> str:
+    return """
+You are an assistant that explains home insurance and construction estimates
+for homeowners in simple, friendly English.
+
+DOCUMENT READING:
+- Carefully read any text from the insurance estimate and (if provided) the contractor estimate.
+- When helpful, refer to specific numbers from the estimate, such as:
+  - Line items
+  - Quantities
+  - Unit prices (e.g. $/sq ft)
+  - Totals, subtotals, taxes, depreciation
+- If the user asks about price points, allowances, or overages, you may:
+  - Point out what unit prices or allowances the estimate appears to use for materials like tile, carpet, baseboards, etc.
+  - Explain in plain language how choosing more expensive materials could create out-of-pocket costs.
+  - Suggest specific questions they can ask their adjuster or contractor about these numbers.
+
+GENERAL MARKET RANGES:
+- You may also provide very general, approximate price ranges for common materials
+  (for example, basic vs mid-grade carpet or tile), to help the user understand
+  how their estimate compares to typical ranges.
+- When you do this:
+  - Make it clear these are broad, approximate ranges, not a quote for their project.
+  - Keep the ranges conservative and generic, not tied to a specific city.
+  - Clearly separate "numbers from your estimate" from "typical market ranges".
+
+HARD RULES:
+- You are NOT a lawyer, insurance adjuster, or contractor.
+- Treat any statements from the insurance company, policy documents,
+  or contractor as authoritative.
+- NEVER say that an estimate is wrong, unfair, or incomplete.
+- NEVER say what the insurance company "should" cover or "should" pay.
+- You may ONLY suggest neutral questions the user can ask their adjuster
+  or contractor, such as:
+  - "You may want to ask your adjuster whether..."
+  - "You can confirm with your contractor if..."
+- If the user uploads both an insurance estimate and a contractor estimate:
+  - You MAY point out clear structural differences (e.g., one includes paint and the other does not),
+    but ALWAYS frame them as questions to ask:
+    - "Your insurance estimate includes X but your contractor's estimate also includes Y.
+       You may want to ask which parts you pay out of pocket."
+  - NEVER say that insurance 'should' pay for anything.
+
+PRICE AND ALLOWANCE QUESTIONS:
+- When the user asks what price point they should shop at (for tile, carpet, etc.):
+  1) First, look for any relevant numbers in the estimate (unit prices, allowances).
+     - Explain in plain language what those numbers mean and how they relate to
+       the user's choices (for example, "This estimate appears to use about $3.20/sq ft
+       for carpet materials and about $4.50/sq ft for tile materials.").
+  2) Second, if helpful, provide broad, typical market ranges for those materials
+     (for example, basic vs mid-range materials).
+  3) Emphasize that:
+     - These are general ranges, not a quote.
+     - Their adjuster and contractor can give exact allowances and pricing for their project.
+  4) Do NOT judge whether the estimate is "too high" or "too low."
+  5) Encourage the user to confirm with their adjuster or contractor:
+     - "You may want to ask, 'What is my material allowance per square foot for tile and carpet,
+        and how are any overages calculated?'"
+
+GOALS:
+1. Explain major sections of the estimate in plain English, grouped by room/area.
+2. Identify decisions the homeowner needs to make (materials, colors, scope choices).
+3. When relevant, read and use specific numbers from the estimate to help the user
+   understand approximate price levels and how overages might occur.
+4. When useful, give separate, clearly-labeled general market ranges for common materials
+   so the user has context.
+5. Suggest polite, neutral follow-up questions for their adjuster and contractor.
+6. Remind the user that their insurance company and contractor have the final say.
+
+OUTPUT FORMAT (English):
+- Short intro
+- "Summary by Area"
+- "Decisions You May Need to Make"
+- If relevant, a brief section called "Key Numbers From Your Estimate" where you list important numbers you found.
+- If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
+- "Questions to Ask Your Adjuster"
+- "Questions to Ask Your Contractor"
+- End with a short reminder that this is general information only.
+""".strip()
+
+def estimate_explainer_tab(preferred_lang: Dict):
+    st.subheader("Estimate Explainer")
+
+    st.markdown("### Upload your insurance estimate")
+    insurance_files = st.file_uploader(
+        "Insurance estimate (PDF or image)",
+        type=["pdf", "png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key="ins_files",
+    )
+
+    st.markdown("### Optional: upload your contractor's estimate")
+    contractor_files = st.file_uploader(
+        "Contractor estimate (PDF or image)",
+        type=["pdf", "png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key="con_files",
+    )
+
+    extra_notes = st.text_area(
+        "Anything your adjuster or contractor already explained that we should treat as correct? (Optional)",
+        help="For example: 'Insurance will only replace the bedroom carpet, not the hallway.'",
+    )
+
+    if st.button("Explain my estimate"):
+        if not insurance_files:
+            st.warning("Please upload at least your insurance estimate.")
+            return
+
+        with st.spinner("Analyzing your documents..."):
+            ins_text = extract_text_from_files(insurance_files)
+            con_text = extract_text_from_files(contractor_files) if contractor_files else ""
+
+            user_content = f"""
+[USER CONTEXT]
+
+EXTRA NOTES FROM USER (treat as correct if they say it came from adjuster/contractor):
+{extra_notes or 'None provided'}
+
+INSURANCE ESTIMATE TEXT:
+{ins_text}
+
+CONTRACTOR ESTIMATE TEXT (may be empty):
+{con_text or 'None provided'}
+""".strip()
+
+            system_prompt = build_estimate_system_prompt()
+            english_answer = call_gpt(system_prompt, user_content)
+            translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
+
+            st.session_state["estimate_explanation_en"] = english_answer
+
+        st.markdown("### Explanation")
+        st.markdown(english_answer)
+
+        if translated_answer:
+            st.markdown("### Spanish Translation")
+            st.markdown(translated_answer)
+
+    # Follow-up
+    st.markdown("---")
+    st.markdown("#### Follow-up question about this explanation")
+    follow_q = st.text_input(
+        "If you want more detail about something above, type your question here."
+    )
+    if st.button("Ask follow-up"):
+        if not follow_q:
+            st.warning("Please type a question.")
+        else:
+            prev_expl = st.session_state.get("estimate_explanation_en", "")
+            if not prev_expl:
+                st.warning("Please run an explanation first.")
+            else:
+                with st.spinner("Generating follow-up explanation..."):
+                    follow_system = """
+You are continuing the same role as before: explain estimates with the same rules.
+Do NOT contradict your previous explanation. Refer back to it if needed.
+Remember: you cannot say an estimate is wrong or what should be covered.
+Only suggest neutral questions for the user to ask their adjuster or contractor.
+""".strip()
+                    follow_user = f"""
+Previous explanation (English):
+
+{prev_expl}
+
+User follow-up question:
+{follow_q}
+""".strip()
+                    follow_en = call_gpt(follow_system, follow_user, max_output_tokens=500)
+                    follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+
+                st.markdown("##### Follow-up answer")
+                st.markdown(follow_en)
+                if follow_es:
+                    st.markdown("##### Spanish Translation")
+                    st.markdown(follow_es)
+
+    # Full disclaimers at bottom
+    st.markdown("---")
+    st.markdown(BASE_DISCLAIMER_EN)
+    if preferred_lang["code"] == "es":
+        st.markdown(BASE_DISCLAIMER_ES)
+    st.markdown(AGENT_A_DISCLAIMER_EN)
+    if preferred_lang["code"] == "es":
+        st.markdown(AGENT_A_DISCLAIMER_ES)
+
+
+
+# ======================
+# Mini-Agent B: Renovation Plan
+# ======================
+
+def build_renovation_system_prompt() -> str:
+    return """
+You are an assistant that explains typical sequences for home repair projects,
+especially after water damage (e.g., laundry room leaks, bedroom carpet damage).
+
+HARD RULES:
+- You are NOT the user's contractor, engineer, or inspector.
+- You must NOT say that the contractor's plan is wrong.
+- If the user provides a sequence from their contractor, treat it as correct and primary.
+  You may only explain it and suggest neutral questions they can ask.
+- When you describe a sequence, use words like "often", "typically", or "in many projects".
+  Always add that the user should follow their contractor's specific plan if it differs.
+
+GOALS:
+1. Suggest a clear, typical order of operations based on the user inputs
+   (demo, subfloor repair, tile, grout, baseboards, paint, carpet, cabinets, countertops, etc.).
+2. Provide a short checklist of what the homeowner may need to prepare or decide before each step.
+3. Suggest polite questions they can ask their contractor to confirm details.
+
+OUTPUT FORMAT (English):
+- "Typical Sequence for Your Project"
+- "What You May Need to Prepare"
+- "Questions to Ask Your Contractor"
+- Short reminder at the end that this is general guidance only.
+""".strip()
+
+
+def renovation_plan_tab(preferred_lang: Dict):
+    st.subheader("Renovation Plan")
+
+    st.markdown("### Areas involved")
+    rooms = st.multiselect(
+        "Select all areas that apply",
+        [
+            "Living room",
+            "Loft",
+            "Kitchen",
+            "Bathroom",
+            "Bedroom",
+            "Laundry room",
+            "Hallway",
+            "Stairs",
+            "Exterior",
+            "Other",
+        ],
+        default=[],
+    )
+
+    other_rooms = ""
+    if "Other" in rooms:
+        other_rooms = st.text_input("Describe other areas:")
+
+    st.markdown("### Kinds of work")
+
+    work_types = st.multiselect(
+    "Select all kinds of work that apply",
+    [
+        "Water mitigation / drying",
+        "Mold remediation",
+        "Demolition (remove damaged materials)",
+
+        "Subfloor repair",
+        "Framing / drywall repair",
+        "Insulation",
+
+        "Tile installation",
+        "Grout",
+        "Floor leveling / underlayment",
+        "LVP / laminate installation",
+        "Carpet / pad",
+        "Hardwood installation / refinishing",
+        "Transitions / thresholds",
+
+        "Drywall finishing / texture",
+        "Painting (walls, ceilings, trim)",
+        "Baseboards / trim",
+
+        "Cabinets",
+        "Countertops",
+        "Backsplash tile",
+
+        "Plumbing work (fixtures, lines, toilet reset)",
+        "Electrical work (lights, outlets, switches)",
+
+        "Door installation / trim",
+        "Vanity installation",
+        "Shower/tub area work",
+
+        "Other",
+    ],
+    default=[],
+)
+
+
+    other_work = ""
+    if "Other" in work_types:
+        other_work = st.text_input("Describe other work needed:")
+
+    contractor_sequence = st.text_area(
+        "Has your contractor already told you an order of work? (Optional)",
+        help="For example: 'Tile in laundry first, then baseboards, then carpet upstairs.'",
+    )
+
+    extra_notes = st.text_area(
+        "Anything else we should know? (Optional)",
+        help="For example: pets, tight schedule, or needing certain rooms done first.",
+    )
+
+    if st.button("Generate a typical sequence"):
+        with st.spinner("Putting together a typical sequence..."):
+            user_content = f"""
+ROOMS INVOLVED:
+{', '.join(rooms) if rooms else 'Not specified'}
+Other rooms details: {other_rooms or 'None provided'}
+
+WORK TYPES:
+{', '.join(work_types) if work_types else 'Not specified'}
+Other work details: {other_work or 'None provided'}
+
+CONTRACTOR'S SEQUENCE (if any, treat as primary):
+{contractor_sequence or 'None provided'}
+
+EXTRA NOTES:
+{extra_notes or 'None provided'}
+""".strip()
+
+            system_prompt = build_renovation_system_prompt()
+            english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
+            translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
+
+        st.markdown("### Typical plan")
+        st.markdown(english_answer)
+
+        if translated_answer:
+            st.markdown("### Spanish Translation")
+            st.markdown(translated_answer)
+
+    # Full disclaimers at bottom
+    st.markdown("---")
+    st.markdown(BASE_DISCLAIMER_EN)
+    if preferred_lang["code"] == "es":
+        st.markdown(BASE_DISCLAIMER_ES)
+    st.markdown(AGENT_B_DISCLAIMER_EN)
+    if preferred_lang["code"] == "es":
+        st.markdown(AGENT_B_DISCLAIMER_ES)
+
+
+
+
+# ======================
+# Mini-Agent C: Design Helper
+# ======================
+
+def build_design_system_prompt() -> str:
+    return """
+You are a general interior-design helper for homeowners selecting finishes
+and materials during repairs or remodeling. Your role is NOT limited to flooring.
+You must base all suggestions ONLY on the materials the user selected.
+
+ALLOWED MATERIAL CATEGORIES (examples, not exhaustive):
+- Flooring (tile, carpet, LVP, hardwood)
+- Paint colors
+- Cabinets and cabinet colors
+- Countertops (quartz, granite, laminate)
+- Backsplash tile
+- Hardware and fixtures
+- Trim/baseboards
+- Lighting
+- Other user-specified materials
+
+HARD RULES:
+1. You are NOT a professional interior designer or contractor.
+2. Treat any design recommendations from the user's contractor or designer as primary.
+3. NEVER assume the project is about flooring unless the user selected flooring materials.
+4. NEVER introduce materials the user did not choose.
+5. Keep suggestions practical, neutral, and easy to understand.
+6. Emphasize that real-world lighting and samples matter more than AI suggestions.
+
+GOALS:
+1. Use the room type, selected materials, wall color, adjacent finishes,
+   style preferences, contrast preferences, and usage (kids/pets/traffic)
+   to propose 2–3 clear and coherent "design directions."
+2. Discuss material-specific considerations:
+   - If tile is selected → grout color, finish, pattern.
+   - If cabinets are selected → undertones, hardware finishes.
+   - If paint is selected → undertones, natural/artificial light.
+   - If countertops are selected → veining, movement, sheen.
+   - If multiple materials are selected → how they coordinate.
+3. Give practical notes about durability, maintenance, and color matching.
+4. Suggest polite, neutral questions the user can ask their contractor or designer.
+
+OUTPUT FORMAT (English):
+- "Overall Design Direction"
+- "Option 1"
+- "Option 2"
+- (Option 3 if helpful)
+- "Material-Specific Notes"
+- "Practical Considerations"
+- "Questions to Ask Your Contractor or Designer"
+- Short reminder that this is general guidance only.
+""".strip()
+
+
+def design_helper_tab(preferred_lang: Dict):
+    st.subheader("Design Helper")
+
+    # Room selection with unified placeholder
+    room_options = [
+        "Select...",
+        "Laundry room",
+        "Hallway",
+        "Bedroom",
+        "Stairs",
+        "Living room",
+        "Kitchen",
+        "Bathroom",
+        "Other",
+    ]
+    room_choice = st.selectbox("Which room is this for?", room_options, index=0)
+    room = "" if room_choice == "Select..." else room_choice
+
+    if room == "Other":
+        room = st.text_input("Describe the room:", placeholder="Example: guest room, loft, etc.")
+
+    # Materials being chosen – starts empty by default
+    materials = st.multiselect(
+        "Select materials (choose one or more)",
+        [
+            "Tile",
+            "Carpet",
+            "LVP (luxury vinyl plank)",
+            "Laminate",
+            "Hardwood",
+            "Paint color only",
+            "Cabinets",
+            "Countertops",
+            "Backsplash",
+            "Baseboards / trim",
+            "Lighting",
+            "Other",
+        ],
+        default=[],
+    )
+    other_materials = ""
+    if "Other" in materials:
+        other_materials = st.text_input("Describe other materials:")
+
+    wall_color = st.text_input(
+        "Wall color (name or description)",
+        help="Example: 'Greek Villa (Sherwin-Williams), warm off-white' or 'light gray, a bit cool'.",
+    )
+
+    adjacent_floor = st.text_input(
+        "Existing flooring or other finishes in nearby areas (if any)",
+        help="Example: 'dark brown wood in hallway', 'gray tile in bathroom', 'white cabinets', etc.",
+    )
+
+    # Style preference with unified placeholder
+    style_options = [
+        "Select...",
+        "Not sure",
+        "Modern / clean",
+        "Traditional",
+        "Farmhouse / rustic",
+        "Transitional",
+    ]
+    style_choice = st.selectbox("Overall style you prefer", style_options, index=0)
+    style_pref = "" if style_choice == "Select..." else style_choice
+
+    # Contrast preference with unified placeholder
+    contrast_options = [
+        "Select...",
+        "More contrast",
+        "More blended / subtle",
+        "Not sure",
+    ]
+    contrast_choice = st.selectbox(
+        "Do you prefer more contrast or a more blended look?",
+        contrast_options,
+        index=0,
+    )
+    contrast_pref = "" if contrast_choice == "Select..." else contrast_choice
+
+    # Traffic/use with unified placeholder
+    traffic_options = [
+        "Select...",
+        "Adults only",
+        "Kids",
+        "Kids + pets",
+        "High traffic (everyone walks here)",
+    ]
+    traffic_choice = st.selectbox(
+        "Who uses this space?",
+        traffic_options,
+        index=0,
+    )
+    traffic_info = "" if traffic_choice == "Select..." else traffic_choice
+
+    contractor_design_notes = st.text_area(
+        "Anything your contractor or designer already suggested? (Optional)",
+        help="Example: 'Contractor suggested warm greige tile and slightly darker carpet.'",
+    )
+
+    extra_notes = st.text_area(
+        "Anything else about your taste or worries? (Optional)",
+        help="Example: 'Hate yellow undertones', 'Don't want to see every crumb', etc.",
+    )
+
+    photos = st.file_uploader(
+        "Optional: upload photos of your current space or samples (tile, carpet, cabinets, etc.)",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+    )
+
+    if photos:
+        st.info(
+            "In this version, the AI does not analyze the images directly, "
+            "but you can still upload them for your own reference or to share with your contractor."
+        )
+
+    if st.button("Suggest some design directions"):
+        # Basic validation: need at least a room and one material
+        if not room or not materials:
+            st.warning("Please select a room and at least one material before asking for suggestions.")
+            return
+
+        with st.spinner("Thinking through some options..."):
+            photo_names = [p.name for p in photos] if photos else []
+
+            user_content = f"""
+ROOM:
+{room}
+
+MATERIALS SELECTED:
+{', '.join(materials)}
+Other materials details: {other_materials or 'None provided'}
+
+WALL COLOR DESCRIPTION:
+{wall_color or 'Not specified'}
+
+ADJACENT FINISHES:
+{adjacent_floor or 'Not specified'}
+
+STYLE PREFERENCE:
+{style_pref or 'Not specified'}
+
+CONTRAST PREFERENCE:
+{contrast_pref or 'Not specified'}
+
+TRAFFIC / USERS:
+{traffic_info or 'Not specified'}
+
+CONTRACTOR / DESIGNER SUGGESTIONS (treat as primary):
+{contractor_design_notes or 'None provided'}
+
+EXTRA NOTES:
+{extra_notes or 'None provided'}
+
+PHOTOS UPLOADED (names only; AI does not see the images in this version):
+{', '.join(photo_names) if photo_names else 'None'}
+""".strip()
+
+            system_prompt = build_design_system_prompt()
+            english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
+            translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
+
+        st.markdown("### Suggestions")
+        st.markdown(english_answer)
+
+        if translated_answer:
+            st.markdown("### Spanish Translation")
+            st.markdown(translated_answer)
+
+    # Full disclaimers at bottom
+    st.markdown("---")
+    st.markdown(BASE_DISCLAIMER_EN)
+    if preferred_lang["code"] == "es":
+        st.markdown(BASE_DISCLAIMER_ES)
+    st.markdown(AGENT_C_DISCLAIMER_EN)
+    if preferred_lang["code"] == "es":
+        st.markdown(AGENT_C_DISCLAIMER_ES)
+
+
+
+
+# ======================
+# Main app
+# ======================
+
+def main():
+    # Header row: title on the left, language dropdown on the right
+    header_left, header_right = st.columns([4, 1])
+
+    with header_left:
+        st.title("Home Repair Helper")
+
+    with header_right:
+        st.markdown(
+            "<div style='font-size: 13px; color: #666; margin-bottom: -6px;'>Preferred language for responses</div>",
+            unsafe_allow_html=True,
+        )
+        preferred_lang = get_preferred_language()
+
+    # Tabs
+    tabs = st.tabs(
+        [
+            "HOME",
+            "ESTIMATE EXPLAINER",
+            "RENOVATION PLAN",
+            "DESIGN HELPER",
+        ]
+    )
+
+    with tabs[0]:
+        st.subheader("Welcome")
+        st.write(
+            "This tool is meant to help you better understand your home repair project "
+            "after things like water damage. It does not replace your insurance "
+            "company or your contractor."
+        )
+        st.markdown("""
+### What you can do here
+
+1. **Estimate Explainer**  
+   Upload your insurance estimate (and optionally your contractor’s estimate) to see
+   a plain-English explanation plus suggested questions to ask.
+
+2. **Renovation Plan**  
+   Describe which rooms and types of work are involved, and get a typical order
+   of steps plus a checklist of things you may need to decide or prepare.
+
+3. **Design Helper**  
+   Describe your wall colors, nearby finishes, and preferences to get a few
+   possible directions for materials and colors.
+""")
+
+        if preferred_lang["code"] == "es":
+            st.markdown("""
+**En español (resumen):**
+
+- Puede subir su estimado del seguro para recibir una explicación en lenguaje sencillo.
+- Puede describir las áreas dañadas para ver un orden típico de reparación.
+- Puede describir el color de sus paredes y pisos para recibir sugerencias generales de diseño.
+""")
+
+        st.info(
+            "Your adjuster and your contractor have the final word. "
+            "This app is just here to help you understand and ask good questions."
+        )
+
+    with tabs[1]:
+        estimate_explainer_tab(preferred_lang)
+
+    with tabs[2]:
+        renovation_plan_tab(preferred_lang)
+
+    with tabs[3]:
+        design_helper_tab(preferred_lang)
+
+
+if __name__ == "__main__":
+    main()
