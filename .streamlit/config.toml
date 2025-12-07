@@ -1,0 +1,17 @@
+[theme]
+base = "light"
+
+# Apple-style blue
+primaryColor = "#007AFF"
+
+# Soft light-blue-tinted background
+backgroundColor = "#F5F7FB"
+
+# Sidebar background
+secondaryBackgroundColor = "#FFFFFF"
+
+# Slate-blue text
+textColor = "#1E293B"
+
+# Streamlit will use Inter if we inject it—this avoids the default font
+font = "sans serif"
