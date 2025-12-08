@@ -50,6 +50,18 @@ st.markdown(
 )
 
 
+# Reduce size of white space at top of page
+st.markdown("""
+<style>
+/* Reduce top padding of the main content block */
+.block-container {
+    padding-top: 1.5rem !important;  /* default is ~4–6rem */
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
 # ==================
 # FONTS and colors
 # ==================
