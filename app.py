@@ -4,6 +4,7 @@ from typing import Optional, Dict, List
 import streamlit as st
 from openai import OpenAI
 from dotenv import load_dotenv   # for local .env support
+import base64
 
 # ======================
 # Load environment variables
@@ -24,6 +25,17 @@ st.set_page_config(
     page_icon="🛠️",
     layout="wide",
 )
+
+# Hide Streamlit's automatic "Press Enter to..." hints under text inputs
+st.markdown("""
+<style>
+/* Hide the helper text that appears below text_input widgets */
+[data-testid="stTextInput"] div[data-testid="stCaptionContainer"] {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # Hide the sidebar collapse/expand button (and its stray text)
 st.markdown(
@@ -245,24 +257,100 @@ Translate the following text from English to neutral, clear Spanish.
     return translated.output_text
 
 
-# ======================
-# File text extraction helper (very simple placeholder)
-# ======================
+def build_estimate_pdf_content(
+    insurance_files: List, contractor_files: List, extra_notes: str
+) -> List[Dict]:
+    """
+    Build an 'input' content list for the Responses API that includes:
+    - A text block with user context and notes
+    - One input_file block per uploaded PDF (insurance + contractor)
+    """
+    content: List[Dict] = []
 
-def extract_text_from_files(files) -> str:
+    intro_text = f"""
+[USER CONTEXT]
+
+The user is a homeowner trying to understand one or more estimates
+for home repair or reconstruction.
+
+Extra notes from user (treat as correct if they say it came from adjuster/contractor):
+{extra_notes or 'None provided'}
+
+Below are PDF files they uploaded. Treat PDFs in the first group as insurance estimates,
+and PDFs in the second group as contractor estimates. Read them and follow the
+instructions in the system prompt.
+""".strip()
+
+    content.append({"type": "input_text", "text": intro_text})
+
+    def add_pdf_group(files, label: str):
+        if not files:
+            return
+        for f in files:
+            if f.type == "application/pdf":
+                # Read the uploaded PDF bytes from Streamlit's UploadedFile
+                pdf_bytes = f.read()
+                b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+                content.append(
+                    {
+                        "type": "input_file",
+                        "filename": f.name,
+                        "file_data": f"data:application/pdf;base64,{b64}",
+                    }
+                )
+            else:
+                # We can extend this later to support images with vision if needed
+                content.append(
+                    {
+                        "type": "input_text",
+                        "text": f"[User also uploaded a non-PDF file named '{f.name}' in {label}; "
+                                "this version of the app only reads PDF estimates directly.]",
+                    }
+                )
+
+    add_pdf_group(insurance_files, "insurance estimates")
+    add_pdf_group(contractor_files, "contractor estimates")
+
+    return content
+
+
+def call_gpt_estimate_with_pdfs(
+    system_prompt: str,
+    insurance_files: List,
+    contractor_files: List,
+    extra_notes: str,
+    max_output_tokens: int = 1100,
+) -> str:
     """
-    Minimal placeholder:
-    - Tries to decode as UTF-8 (works for some PDFs and text-like files).
-    - For real deployment, you’ll want proper PDF parsing and OCR for images.
+    Use GPT-4o-mini (vision) with direct PDF input to explain the estimates.
+    This bypasses pypdf and lets the model read the PDFs itself.
     """
-    texts: List[str] = []
-    for f in files:
-        try:
-            content = f.read()
-            texts.append(content.decode("utf-8", errors="ignore"))
-        except Exception:
-            texts.append("[Could not decode this file as text]")
-    return "\n\n---\n\n".join(texts)
+    user_content_blocks = build_estimate_pdf_content(
+        insurance_files, contractor_files, extra_notes
+    )
+
+    response = client.responses.create(
+        model="gpt-4o-mini",  # vision-capable and cheap
+        input=[
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
+            {
+                "role": "user",
+                "content": user_content_blocks,
+            },
+        ],
+        max_output_tokens=max_output_tokens,
+    )
+
+    # Join all output_text blocks into one string
+    pieces = []
+    for block in response.output[0].content:
+        if block.type == "output_text":
+            pieces.append(block.text)
+    return "\n".join(pieces).strip()
+
 
 
 # ======================
@@ -275,13 +363,23 @@ You are an assistant that explains home insurance and construction estimates
 for homeowners in simple, friendly English.
 
 DOCUMENT READING:
-- Carefully read any text from the insurance estimate and (if provided) the contractor estimate.
-- When helpful, refer to specific numbers from the estimate, such as:
-  - Line items
-  - Quantities
+- You will receive raw text from an insurance estimate and (optionally) a contractor estimate.
+- The text may be messy or lack table formatting. You MUST still try to read it and extract useful information.
+- Look for, and when helpful refer to:
+  - Line item descriptions
+  - Quantities (e.g. SF, LF, EA)
   - Unit prices (e.g. $/sq ft)
-  - Totals, subtotals, taxes, depreciation
-- If the user asks about price points, allowances, or overages, you may:
+  - Line totals
+  - Subtotals, taxes, depreciation
+  - Overhead & profit (O&P)
+  - Deductible and net payment amounts
+- ONLY say that the text is unreadable if it is truly empty or clearly not an estimate at all.
+- Do NOT say things like "the text you provided is not in a readable format" if any real text is present. In that case, always do your best to extract key numbers, even if formatting is imperfect.
+
+GENERAL BEHAVIOR:
+- Explain what the estimate is doing in plain English, grouped by room/area when possible.
+- Identify key decisions the homeowner needs to make (materials, areas, scope choices).
+- When the user asks about price points, allowances, or overages, you may:
   - Point out what unit prices or allowances the estimate appears to use for materials like tile, carpet, baseboards, etc.
   - Explain in plain language how choosing more expensive materials could create out-of-pocket costs.
   - Suggest specific questions they can ask their adjuster or contractor about these numbers.
@@ -329,10 +427,10 @@ PRICE AND ALLOWANCE QUESTIONS:
         and how are any overages calculated?'"
 
 GOALS:
-1. Explain major sections of the estimate in plain English, grouped by room/area.
-2. Identify decisions the homeowner needs to make (materials, colors, scope choices).
-3. When relevant, read and use specific numbers from the estimate to help the user
-   understand approximate price levels and how overages might occur.
+1. Explain major sections of the estimate in plain English, grouped by room/area when possible.
+2. Identify decisions the homeowner needs to make (materials, rooms/areas, scope choices).
+3. Read and use specific numbers from the estimate to help the user understand
+   approximate price levels and how overages might occur.
 4. When useful, give separate, clearly-labeled general market ranges for common materials
    so the user has context.
 5. Suggest polite, neutral follow-up questions for their adjuster and contractor.
@@ -342,7 +440,7 @@ OUTPUT FORMAT (English):
 - Short intro
 - "Summary by Area"
 - "Decisions You May Need to Make"
-- If relevant, a brief section called "Key Numbers From Your Estimate" where you list important numbers you found.
+- A section called "Key Numbers From Your Estimate" where you list important totals and unit prices you found (even if incomplete).
 - If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
 - "Questions to Ask Your Adjuster"
 - "Questions to Ask Your Contractor"
@@ -354,7 +452,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
 
     st.markdown("### Upload your insurance estimate")
     insurance_files = st.file_uploader(
-        "Insurance estimate (PDF or image)",
+        "Insurance estimate (PDF preferred)",
         type=["pdf", "png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="ins_files",
@@ -362,7 +460,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
 
     st.markdown("### Optional: upload your contractor's estimate")
     contractor_files = st.file_uploader(
-        "Contractor estimate (PDF or image)",
+        "Contractor estimate (PDF preferred)",
         type=["pdf", "png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="con_files",
@@ -375,31 +473,39 @@ def estimate_explainer_tab(preferred_lang: Dict):
 
     if st.button("Explain my estimate"):
         if not insurance_files:
-            st.warning("Please upload at least your insurance estimate.")
+            st.warning("Please upload at least your insurance estimate (PDF).")
             return
 
-        with st.spinner("Analyzing your documents..."):
-            ins_text = extract_text_from_files(insurance_files)
-            con_text = extract_text_from_files(contractor_files) if contractor_files else ""
-
-            user_content = f"""
-[USER CONTEXT]
-
-EXTRA NOTES FROM USER (treat as correct if they say it came from adjuster/contractor):
-{extra_notes or 'None provided'}
-
-INSURANCE ESTIMATE TEXT:
-{ins_text}
-
-CONTRACTOR ESTIMATE TEXT (may be empty):
-{con_text or 'None provided'}
-""".strip()
-
+        with st.spinner("Reading your estimate PDFs and preparing an explanation..."):
+            # STORE PDFs as bytes for follow-ups
+            st.session_state["estimate_insurance_pdfs"] = [
+                {"name": f.name, "type": f.type, "bytes": f.getvalue()} 
+                for f in insurance_files
+            ]
+            
+            if contractor_files:
+                st.session_state["estimate_contractor_pdfs"] = [
+                    {"name": f.name, "type": f.type, "bytes": f.getvalue()} 
+                    for f in contractor_files
+                ]
+            else:
+                st.session_state["estimate_contractor_pdfs"] = []
+            
             system_prompt = build_estimate_system_prompt()
-            english_answer = call_gpt(system_prompt, user_content)
-            translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
+            english_answer = call_gpt_estimate_with_pdfs(
+                system_prompt=system_prompt,
+                insurance_files=insurance_files,
+                contractor_files=contractor_files or [],
+                extra_notes=extra_notes or "",
+                max_output_tokens=1100,
+            )
+            translated_answer = translate_if_needed(
+                english_answer, preferred_lang["code"]
+            )
 
+            # Store explanation for follow-ups
             st.session_state["estimate_explanation_en"] = english_answer
+            st.session_state["estimate_extra_notes"] = extra_notes
 
         st.markdown("### Explanation")
         st.markdown(english_answer)
@@ -414,31 +520,70 @@ CONTRACTOR ESTIMATE TEXT (may be empty):
     follow_q = st.text_input(
         "If you want more detail about something above, type your question here."
     )
+    
     if st.button("Ask follow-up"):
         if not follow_q:
             st.warning("Please type a question.")
         else:
             prev_expl = st.session_state.get("estimate_explanation_en", "")
-            if not prev_expl:
+            extra_prev = st.session_state.get("estimate_extra_notes", "")
+            
+            # RETRIEVE stored PDFs
+            insurance_pdf_data = st.session_state.get("estimate_insurance_pdfs", [])
+            contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
+
+            if not prev_expl and not insurance_pdf_data:
                 st.warning("Please run an explanation first.")
             else:
                 with st.spinner("Generating follow-up explanation..."):
-                    follow_system = """
-You are continuing the same role as before: explain estimates with the same rules.
-Do NOT contradict your previous explanation. Refer back to it if needed.
-Remember: you cannot say an estimate is wrong or what should be covered.
-Only suggest neutral questions for the user to ask their adjuster or contractor.
-""".strip()
-                    follow_user = f"""
-Previous explanation (English):
+                    follow_system = build_estimate_system_prompt() + """
 
+You are answering a follow-up question. Be consistent with your previous explanation.
+You have access to the original estimate PDFs again, so you can reference specific
+line items, numbers, or details if the user asks about them.
+Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents.
+""".strip()
+
+                    # Build follow-up notes including previous explanation
+                    follow_notes = f"""
+PREVIOUS EXPLANATION (for context):
 {prev_expl}
 
-User follow-up question:
+USER'S FOLLOW-UP QUESTION:
 {follow_q}
+
+ORIGINAL NOTES FROM USER:
+{extra_prev or 'None provided'}
 """.strip()
-                    follow_en = call_gpt(follow_system, follow_user, max_output_tokens=500)
-                    follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+
+                    # RECONSTRUCT file-like objects from stored bytes
+                    from io import BytesIO
+                    
+                    insurance_files_reconstructed = []
+                    for pdf_data in insurance_pdf_data:
+                        file_obj = BytesIO(pdf_data["bytes"])
+                        file_obj.name = pdf_data["name"]
+                        file_obj.type = pdf_data["type"]
+                        insurance_files_reconstructed.append(file_obj)
+                    
+                    contractor_files_reconstructed = []
+                    for pdf_data in contractor_pdf_data:
+                        file_obj = BytesIO(pdf_data["bytes"])
+                        file_obj.name = pdf_data["name"]
+                        file_obj.type = pdf_data["type"]
+                        contractor_files_reconstructed.append(file_obj)
+                    
+                    # CALL WITH PDFs (not just text)
+                    follow_en = call_gpt_estimate_with_pdfs(
+                        system_prompt=follow_system,
+                        insurance_files=insurance_files_reconstructed,
+                        contractor_files=contractor_files_reconstructed,
+                        extra_notes=follow_notes,
+                        max_output_tokens=700,
+                    )
+                    follow_es = translate_if_needed(
+                        follow_en, preferred_lang["code"]
+                    )
 
                 st.markdown("##### Follow-up answer")
                 st.markdown(follow_en)
@@ -454,7 +599,6 @@ User follow-up question:
     st.markdown(AGENT_A_DISCLAIMER_EN)
     if preferred_lang["code"] == "es":
         st.markdown(AGENT_A_DISCLAIMER_ES)
-
 
 
 # ======================
