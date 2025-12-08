@@ -88,6 +88,18 @@ h3 {
 </style>
 """, unsafe_allow_html=True)
 
+# ======================
+# Hide Streamlit Top-Right Menu + Footer
+# ======================
+st.markdown("""
+<style>
+/* Hide the top-right hamburger menu */
+#MainMenu {visibility: hidden !important;}
+
+/* Hide the "Made with Streamlit" footer */
+footer {visibility: hidden !important;}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ======================
