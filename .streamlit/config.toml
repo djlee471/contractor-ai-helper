@@ -15,3 +15,15 @@ textColor = "#1E293B"
 
 # Streamlit will use Inter if we inject it—this avoids the default font
 font = "sans serif"
+
+# ================================
+# Hide Streamlit Cloud toolbar
+# ================================
+
+[client]
+# Hides most of the top-right menu
+toolbarMode = "minimal"
+
+[ui]
+# Hides the running-man top status bar
+hideTopBar = true
