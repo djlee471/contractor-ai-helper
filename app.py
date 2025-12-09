@@ -1032,6 +1032,26 @@ def main():
         )
         preferred_lang = get_preferred_language()
 
+    # ======================
+    # Strong HOME-PAGE Disclaimer (appears above tabs)
+    # ======================
+    if preferred_lang["code"] == "es":
+        st.info(
+            "Esta aplicación en versión beta es solo una herramienta educativa. "
+            "Puede cometer errores o pasar por alto detalles. Su ajustador de seguros, "
+            "sus pólizas por escrito, los códigos de construcción y el plan documentado "
+            "de su contratista siempre tienen la última palabra. No tome decisiones sobre "
+            "cobertura, alcance del trabajo o seguridad basándose solo en esta aplicación."
+        )
+    else:
+        st.info(
+            "This beta app is only a general educational tool. It can miss details or "
+            "be wrong. Your insurance adjuster, written policy documents, building codes, "
+            "and your licensed contractor always have the final word. Do **not** make "
+            "coverage, scope-of-work, or safety decisions based solely on this app."
+        )
+
+
     # Tabs
     tabs = st.tabs(
         [
@@ -1073,11 +1093,6 @@ def main():
 - Puede describir las áreas dañadas para ver un orden típico de reparación.
 - Puede describir el color de sus paredes y pisos para recibir sugerencias generales de diseño.
 """)
-
-        st.info(
-            "Your adjuster and your contractor have the final word. "
-            "This app is just here to help you understand and ask good questions."
-        )
 
     with tabs[1]:
         estimate_explainer_tab(preferred_lang)
