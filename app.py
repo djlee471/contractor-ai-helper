@@ -53,12 +53,27 @@ st.markdown(
 # Reduce size of white space at top of page
 st.markdown("""
 <style>
-/* Reduce top padding of the main content block */
+
+/* Reduce top padding of main container */
 .block-container {
-    padding-top: 1.5rem !important;  /* default is ~4–6rem */
+    padding-top: 0.5rem !important;
 }
+
+/* Remove extra whitespace Streamlit injects above the container */
+section.main > div {
+    padding-top: 0rem !important;
+    margin-top: 0rem !important;
+}
+
+/* Remove top margin from the app view container */
+[data-testid="stAppViewContainer"] {
+    padding-top: 0rem !important;
+    margin-top: 0rem !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
@@ -463,6 +478,7 @@ GOALS:
 OUTPUT FORMAT (English):
 - Short intro
 - "Summary by Area"
+- "Summary by material / task type" (if helpful)
 - "Decisions You May Need to Make"
 - A section called "Key Numbers From Your Estimate" where you list important totals and unit prices you found (even if incomplete).
 - If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
@@ -617,12 +633,16 @@ ORIGINAL NOTES FROM USER:
 
     # Full disclaimers at bottom
     st.markdown("---")
+
+    # English block first
     st.markdown(BASE_DISCLAIMER_EN)
+    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+
+    # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
-    st.markdown(AGENT_A_DISCLAIMER_EN)
-    if preferred_lang["code"] == "es":
         st.markdown(AGENT_A_DISCLAIMER_ES)
+
 
 
 # ======================
@@ -737,7 +757,7 @@ def renovation_plan_tab(preferred_lang: Dict):
         help="For example: pets, tight schedule, or needing certain rooms done first.",
     )
 
-    if st.button("Generate a typical sequence"):
+    if st.button("Generate a typical reconstruction process"):
         with st.spinner("Putting together a typical sequence..."):
             user_content = f"""
 ROOMS INVOLVED:
@@ -768,12 +788,15 @@ EXTRA NOTES:
 
     # Full disclaimers at bottom
     st.markdown("---")
+
+    # English block first
     st.markdown(BASE_DISCLAIMER_EN)
+    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+
+    # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
-    st.markdown(AGENT_B_DISCLAIMER_EN)
-    if preferred_lang["code"] == "es":
-        st.markdown(AGENT_B_DISCLAIMER_ES)
+        st.markdown(AGENT_A_DISCLAIMER_ES)
 
 
 
@@ -785,7 +808,7 @@ EXTRA NOTES:
 def build_design_system_prompt() -> str:
     return """
 You are a general interior-design helper for homeowners selecting finishes
-and materials during repairs or remodeling. Your role is NOT limited to flooring.
+and materials during repairs or remodeling.
 You must base all suggestions ONLY on the materials the user selected.
 
 ALLOWED MATERIAL CATEGORIES (examples, not exhaustive):
@@ -802,9 +825,9 @@ ALLOWED MATERIAL CATEGORIES (examples, not exhaustive):
 HARD RULES:
 1. You are NOT a professional interior designer or contractor.
 2. Treat any design recommendations from the user's contractor or designer as primary.
-3. NEVER assume the project is about flooring unless the user selected flooring materials.
-4. NEVER introduce materials the user did not choose.
-5. Keep suggestions practical, neutral, and easy to understand.
+3. NEVER introduce materials the user did not choose.
+4. Keep suggestions practical, neutral, and easy to understand.
+5. Consider alternative design philosophies to ensure you give the user a balanced view.
 6. Emphasize that real-world lighting and samples matter more than AI suggestions.
 
 GOALS:
@@ -818,6 +841,7 @@ GOALS:
    - If countertops are selected → veining, movement, sheen.
    - If multiple materials are selected → how they coordinate.
 3. Give practical notes about durability, maintenance, and color matching.
+4. Also discuss additional factors and decisions the user may need to consider, such as tile layout, carpet padding, grout sealing, cabinet hardware styles, etc.
 4. Suggest polite, neutral questions the user can ask their contractor or designer.
 
 OUTPUT FORMAT (English):
@@ -1004,12 +1028,15 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
 
     # Full disclaimers at bottom
     st.markdown("---")
+
+    # English block first
     st.markdown(BASE_DISCLAIMER_EN)
+    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+
+    # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
-    st.markdown(AGENT_C_DISCLAIMER_EN)
-    if preferred_lang["code"] == "es":
-        st.markdown(AGENT_C_DISCLAIMER_ES)
+        st.markdown(AGENT_A_DISCLAIMER_ES)
 
 
 
@@ -1032,8 +1059,36 @@ def main():
         )
         preferred_lang = get_preferred_language()
 
+
+
+    # Tabs
+    tabs = st.tabs(
+        [
+            "HOME",
+            "ESTIMATE EXPLAINER",
+            "RENOVATION PLAN",
+            "DESIGN HELPER",
+        ]
+    )
+
+    # Match content (mini-agent) to each tab
+
+    with tabs[1]:
+        estimate_explainer_tab(preferred_lang)
+
+    with tabs[2]:
+        renovation_plan_tab(preferred_lang)
+
+    with tabs[3]:
+        design_helper_tab(preferred_lang)
+
+
+    with tabs[0]:
+# Match content (mini-agent) to each tab
+
+with tabs[0]:
     # ======================
-    # Strong HOME-PAGE Disclaimer (appears above tabs)
+    # Strong HOME-PAGE Disclaimer (only in HOME tab)
     # ======================
     if preferred_lang["code"] == "es":
         st.info(
@@ -1051,24 +1106,24 @@ def main():
             "coverage, scope-of-work, or safety decisions based solely on this app."
         )
 
-
-    # Tabs
-    tabs = st.tabs(
-        [
-            "HOME",
-            "ESTIMATE EXPLAINER",
-            "RENOVATION PLAN",
-            "DESIGN HELPER",
-        ]
+    st.subheader("Welcome")
+    st.write(
+        "This tool is meant to help you better understand your home repair project. "
+        "It does not replace your insurance company or your contractor."
     )
+    # ... (rest of your HOME content here: the bullets, etc.)
 
-    with tabs[0]:
-        st.subheader("Welcome")
-        st.write(
-            "This tool is meant to help you better understand your home repair project "
-            "after things like water damage. It does not replace your insurance "
-            "company or your contractor."
-        )
+with tabs[1]:
+    estimate_explainer_tab(preferred_lang)
+
+with tabs[2]:
+    renovation_plan_tab(preferred_lang)
+
+with tabs[3]:
+    design_helper_tab(preferred_lang)
+
+
+
         st.markdown("""
 ### What you can do here
 
@@ -1084,24 +1139,6 @@ def main():
    Describe your wall colors, nearby finishes, and preferences to get a few
    possible directions for materials and colors.
 """)
-
-        if preferred_lang["code"] == "es":
-            st.markdown("""
-**En español (resumen):**
-
-- Puede subir su estimado del seguro para recibir una explicación en lenguaje sencillo.
-- Puede describir las áreas dañadas para ver un orden típico de reparación.
-- Puede describir el color de sus paredes y pisos para recibir sugerencias generales de diseño.
-""")
-
-    with tabs[1]:
-        estimate_explainer_tab(preferred_lang)
-
-    with tabs[2]:
-        renovation_plan_tab(preferred_lang)
-
-    with tabs[3]:
-        design_helper_tab(preferred_lang)
 
 
 if __name__ == "__main__":
