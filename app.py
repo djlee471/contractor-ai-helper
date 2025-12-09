@@ -900,15 +900,14 @@ def design_helper_tab(preferred_lang: Dict):
     if "Other" in materials:
         other_materials = st.text_input("Describe other materials:")
 
-    wall_color = st.text_input(
-        "Wall color (name or description)",
-        help="Example: 'Greek Villa (Sherwin-Williams), warm off-white' or 'light gray, a bit cool'.",
+    existing_finishes = st.text_input(
+        "Colors of existing finishes (walls, floors, cabinets, etc.)",
+        help=(
+            "Example: 'Greek Villa walls, medium brown wood floor, white shaker cabinets,' "
+            "or 'light gray tile, dark gray grout, black hardware.'"
+        ),
     )
 
-    adjacent_floor = st.text_input(
-        "Existing flooring or other finishes in nearby areas (if any)",
-        help="Example: 'dark brown wood in hallway', 'gray tile in bathroom', 'white cabinets', etc.",
-    )
 
     # Style preference with unified placeholder
     style_options = [
@@ -990,11 +989,8 @@ MATERIALS SELECTED:
 {', '.join(materials)}
 Other materials details: {other_materials or 'None provided'}
 
-WALL COLOR DESCRIPTION:
-{wall_color or 'Not specified'}
-
-ADJACENT FINISHES:
-{adjacent_floor or 'Not specified'}
+EXISTING FINISH COLORS / MATERIALS (WALLS, FLOORS, CABINETS, ETC.):
+{existing_finishes or 'Not specified'}
 
 STYLE PREFERENCE:
 {style_pref or 'Not specified'}
@@ -1073,20 +1069,25 @@ def main():
     with tabs[0]:
         # Strong HOME-PAGE Disclaimer (only in HOME tab)
         if preferred_lang["code"] == "es":
-            st.info(
-                "Esta aplicación en versión beta es solo una herramienta educativa. "
-                "Puede cometer errores o pasar por alto detalles. Su ajustador de seguros, "
-                "sus pólizas por escrito, los códigos de construcción y el plan documentado "
-                "de su contratista siempre tienen la última palabra. No tome decisiones sobre "
-                "cobertura, alcance del trabajo o seguridad basándose solo en esta aplicación."
+           st.info(
+                "Esta aplicación en versión beta solo brinda orientación educativa general y puede estar "
+                "incompleta o contener errores. No puede ofrecer asesoría profesional de seguros, construcción, "
+                "seguridad ni diseño. No confíe en esta aplicación para determinar cobertura de seguros, alcance "
+                "de reparación, requisitos de seguridad, selección de materiales ni decisiones de diseño. "
+                "Siempre siga la guía de su ajustador de seguros, sus pólizas por escrito, los códigos de "
+                "construcción locales y su contratista o diseñador con licencia."
             )
+
         else:
             st.info(
-                "This beta app is only a general educational tool. It can miss details or "
-                "be wrong. Your insurance adjuster, written policy documents, building codes, "
-                "and your licensed contractor always have the final word. Do **not** make "
-                "coverage, scope-of-work, or safety decisions based solely on this app."
+                "This beta tool provides general educational information only and may be incomplete or "
+                "incorrect. It does not provide professional insurance, legal, construction, safety, or "
+                "design advice. Users should not rely on this tool to determine insurance coverage, repair "
+                "scope, safety requirements, material selections, or design decisions. All final decisions "
+                "must be based on the guidance of your licensed contractor, designer, insurance adjuster, "
+                "and applicable building codes and policy documents."
             )
+
 
         st.subheader("Welcome")
         st.write(
