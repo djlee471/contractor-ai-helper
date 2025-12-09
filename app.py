@@ -1059,8 +1059,6 @@ def main():
         )
         preferred_lang = get_preferred_language()
 
-
-
     # Tabs
     tabs = st.tabs(
         [
@@ -1071,58 +1069,31 @@ def main():
         ]
     )
 
-    # Match content (mini-agent) to each tab
-
-    with tabs[1]:
-        estimate_explainer_tab(preferred_lang)
-
-    with tabs[2]:
-        renovation_plan_tab(preferred_lang)
-
-    with tabs[3]:
-        design_helper_tab(preferred_lang)
-
-
+    # ---------- HOME TAB ----------
     with tabs[0]:
-# Match content (mini-agent) to each tab
+        # Strong HOME-PAGE Disclaimer (only in HOME tab)
+        if preferred_lang["code"] == "es":
+            st.info(
+                "Esta aplicación en versión beta es solo una herramienta educativa. "
+                "Puede cometer errores o pasar por alto detalles. Su ajustador de seguros, "
+                "sus pólizas por escrito, los códigos de construcción y el plan documentado "
+                "de su contratista siempre tienen la última palabra. No tome decisiones sobre "
+                "cobertura, alcance del trabajo o seguridad basándose solo en esta aplicación."
+            )
+        else:
+            st.info(
+                "This beta app is only a general educational tool. It can miss details or "
+                "be wrong. Your insurance adjuster, written policy documents, building codes, "
+                "and your licensed contractor always have the final word. Do **not** make "
+                "coverage, scope-of-work, or safety decisions based solely on this app."
+            )
 
-with tabs[0]:
-    # ======================
-    # Strong HOME-PAGE Disclaimer (only in HOME tab)
-    # ======================
-    if preferred_lang["code"] == "es":
-        st.info(
-            "Esta aplicación en versión beta es solo una herramienta educativa. "
-            "Puede cometer errores o pasar por alto detalles. Su ajustador de seguros, "
-            "sus pólizas por escrito, los códigos de construcción y el plan documentado "
-            "de su contratista siempre tienen la última palabra. No tome decisiones sobre "
-            "cobertura, alcance del trabajo o seguridad basándose solo en esta aplicación."
+        st.subheader("Welcome")
+        st.write(
+            "This tool is meant to help you better understand your home repair project "
+            "after things like water damage. It does not replace your insurance "
+            "company or your contractor."
         )
-    else:
-        st.info(
-            "This beta app is only a general educational tool. It can miss details or "
-            "be wrong. Your insurance adjuster, written policy documents, building codes, "
-            "and your licensed contractor always have the final word. Do **not** make "
-            "coverage, scope-of-work, or safety decisions based solely on this app."
-        )
-
-    st.subheader("Welcome")
-    st.write(
-        "This tool is meant to help you better understand your home repair project. "
-        "It does not replace your insurance company or your contractor."
-    )
-    # ... (rest of your HOME content here: the bullets, etc.)
-
-with tabs[1]:
-    estimate_explainer_tab(preferred_lang)
-
-with tabs[2]:
-    renovation_plan_tab(preferred_lang)
-
-with tabs[3]:
-    design_helper_tab(preferred_lang)
-
-
 
         st.markdown("""
 ### What you can do here
@@ -1140,6 +1111,15 @@ with tabs[3]:
    possible directions for materials and colors.
 """)
 
+    # ---------- OTHER TABS ----------
+    with tabs[1]:
+        estimate_explainer_tab(preferred_lang)
+
+    with tabs[2]:
+        renovation_plan_tab(preferred_lang)
+
+    with tabs[3]:
+        design_helper_tab(preferred_lang)
 
 if __name__ == "__main__":
     main()
