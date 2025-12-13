@@ -79,23 +79,16 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 """, unsafe_allow_html=True)
 
 
-##FIX Header showing up in CLOUD push version
-# Hide Streamlit header (only appears in cloud, not locally)
+# ======================
+# Hide Streamlit Top-Right Menu + Footer + Header
+# ======================
 st.markdown("""
 <style>
-/* Hide Streamlit's cloud header toolbar */
+/* Hide the header toolbar area (cloud only) */
 section[data-testid="stHeader"] {
     display: none !important;
 }
-</style>
-""", unsafe_allow_html=True)
 
-
-# ======================
-# Hide Streamlit Top-Right Menu + Footer
-# ======================
-st.markdown("""
-<style>
 /* Hide the top-right hamburger menu */
 #MainMenu {visibility: hidden !important;}
 
@@ -103,7 +96,6 @@ st.markdown("""
 footer {visibility: hidden !important;}
 </style>
 """, unsafe_allow_html=True)
-
 
 # ==================
 # FONTS and colors
