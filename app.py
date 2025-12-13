@@ -75,6 +75,16 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
     padding-left: 2.5rem;
     padding-right: 2.5rem;
 }
+            
+/* Tighter spacing ONLY on mobile */
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 0.25rem !important;  /* reduce top space on mobile */
+        padding-left: 1rem !important;     /* also reduce side padding on small screens */
+        padding-right: 1rem !important;
+    }
+}
+            
 </style>
 """, unsafe_allow_html=True)
 
