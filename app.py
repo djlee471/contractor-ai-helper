@@ -70,7 +70,7 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 
 /* Control content container - all properties in one place */
 .block-container {
-    padding-top: 0.75rem !important;
+    padding-top: 0.0rem !important;
     max-width: 1100px;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
