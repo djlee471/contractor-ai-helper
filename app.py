@@ -52,11 +52,6 @@ st.markdown(
 # Reduce size of white space at top of page + Force white background + Set width
 st.markdown("""
 <style>
-/* Hide Streamlit's header toolbar */
-section[data-testid="stHeader"] {
-    display: none !important;
-}
-
 /* Remove Streamlit's default top banner spacing */
 [data-testid="stAppViewContainer"] {
     padding-top: 0rem !important;
@@ -75,10 +70,22 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 
 /* Control content container - all properties in one place */
 .block-container {
-    padding-top: 0.75rem !important;   /* breathing room */
+    padding-top: 0.75rem !important;
     max-width: 1100px;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+##FIX Header showing up in CLOUD push version
+# Hide Streamlit header (only appears in cloud, not locally)
+st.markdown("""
+<style>
+/* Hide Streamlit's cloud header toolbar */
+section[data-testid="stHeader"] {
+    display: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
