@@ -84,18 +84,38 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 # ======================
 st.markdown("""
 <style>
-/* Hide the header toolbar area (cloud only) */
-section[data-testid="stHeader"] {
+/* Hide the header toolbar area (cloud only) - multiple selectors */
+header[data-testid="stHeader"],
+section[data-testid="stHeader"],
+div[data-testid="stHeader"],
+.stApp > header {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 /* Hide the top-right hamburger menu */
-#MainMenu {visibility: hidden !important;}
+#MainMenu {
+    visibility: hidden !important;
+    display: none !important;
+}
 
 /* Hide the "Made with Streamlit" footer */
-footer {visibility: hidden !important;}
+footer {
+    visibility: hidden !important;
+    display: none !important;
+}
+
+/* Force app to start at top */
+.stApp {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 # ==================
 # FONTS and colors
