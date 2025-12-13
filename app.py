@@ -75,6 +75,19 @@ section.main > div {
 """, unsafe_allow_html=True)
 
 
+#============================
+# Force all-white background
+#============================
+
+st.markdown("""
+<style>
+/* Force pure white backgrounds */
+html, body, [data-testid="stAppViewContainer"], .block-container {
+    background-color: #FFFFFF !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 
 # ==================
@@ -83,12 +96,18 @@ section.main > div {
 
 st.markdown("""
 <style>
-/* Load Poppins from Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+/* Load Inter (UI/body) + Sora (app title) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@500;600;700&display=swap');
 
-/* Apply Poppins to literally everything */
-html, body, div, span, input, textarea, button, select, label, p, h1, h2, h3, h4, h5, h6, [class], * {
-    font-family: "Poppins", sans-serif !important;
+/* Apply Inter to most UI text */
+html, body, div, span, input, textarea, button, select, label, p, li, ul, ol, [class], * {
+    font-family: "Inter", sans-serif !important;
+}
+
+/* Optional: slightly improve default text rendering */
+html, body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -96,24 +115,70 @@ html, body, div, span, input, textarea, button, select, label, p, h1, h2, h3, h4
 
 st.markdown("""
 <style>
-/* Main page title stays blue from the theme; 
-   use teal as a secondary accent for smaller headings */
-h2 {
-    color: #1D4ED8 !important;   /* rich blue for section headings */
+/* Keep headings neutral so the UI feels more “studio” than “dashboard” */
+h2, h3 {
+    color: #0F172A !important;
 }
 
-h3 {
-    color: #0D9488 !important;   /* teal for subheadings */
-}
-
-/* Make the st.info box a little softer + more readable */
+/* Keep your info box styling (optional: we can purple-ize later) */
 [data-testid="stAlert"] {
-    background-color: #E0F2FE !important;  /* lighter blue fill */
+    background-color: #E0F2FE !important;
     border-color: #60A5FA !important;
     color: #0F172A !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+
+#=================
+## TITLE FONT
+#=================
+
+st.markdown("""
+<style>
+.custom-app-title {
+    font-family: 'Sora', sans-serif !important;
+    font-size: 2.6rem !important;
+    font-weight: 700 !important;
+    margin: 0 0 0.25rem 0;
+    padding: 0;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: #0F172A;  /* deep slate for a premium look */
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+#=========================================
+# Formating headings - getting rid of bold
+#=========================================
+
+st.markdown("""
+<style>
+/* Section headings: larger, not bold */
+h2 {
+    font-weight: 400 !important;     /* regular */
+    font-size: 1.6rem !important;    /* larger for separation */
+    margin-top: 2.75rem !important;
+    margin-bottom: 0.75rem !important;
+    letter-spacing: -0.015em;
+    color: #0F172A;
+}
+
+/* Subsection headings */
+h3 {
+    font-weight: 400 !important;
+    font-size: 1.2rem !important;
+    margin-top: 1.75rem !important;
+    margin-bottom: 0.5rem !important;
+    letter-spacing: -0.01em;
+    color: #0F172A;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ======================
 # Hide Streamlit Top-Right Menu + Footer
@@ -490,6 +555,18 @@ OUTPUT FORMAT (English):
 def estimate_explainer_tab(preferred_lang: Dict):
     st.subheader("Estimate Explainer")
 
+    st.markdown("""
+    <div style="
+        font-size: 0.95rem;
+        color: #475569;
+        margin-bottom: 1.5rem;
+    ">
+        Understand what’s included in your insurance and contractor estimates, 
+        what key numbers mean, and which questions may be worth asking.
+    </div>
+    """, unsafe_allow_html=True)
+
+
     st.markdown("### Upload your insurance estimate")
     insurance_files = st.file_uploader(
         "Insurance estimate (PDF preferred)",
@@ -662,6 +739,17 @@ HARD RULES:
 - When you describe a sequence, use words like "often", "typically", or "in many projects".
   Always add that the user should follow their contractor's specific plan if it differs.
 
+GENERAL SEQUENCING PRINCIPLES (apply to all projects):
+- Construction generally proceeds from structure → mechanical/electrical → drywall and surfaces → flooring → trim → paint touch-ups → fixtures.
+- Do NOT place a step before something that depends on it. 
+  (Example: do not paint or caulk trim before trim is installed; do not install trim before flooring.)
+- Distinguish between early-stage painting (walls/ceiling after drywall) and final painting (trim and touch-ups after trim installation).
+- Flooring, regardless of type, typically goes in before baseboards or shoe molding.
+- If the user scenario is ambiguous, choose the most widely used sequence and clearly note that individual contractors may vary.
+- The homeowner may not list every step. If they mention major items (e.g., tile, carpet, drywall repair),
+  you may include standard related steps (such as underlayment, grout, baseboard reinstallation, and paint touch-ups),
+  but describe these as "typically" or "often" included rather than assuming they are definitely in the contractor's scope.
+
 GOALS:
 1. Suggest a clear, typical order of operations based on the user inputs
    (demo, subfloor repair, tile, grout, baseboards, paint, carpet, cabinets, countertops, etc.).
@@ -673,11 +761,23 @@ OUTPUT FORMAT (English):
 - "What You May Need to Prepare"
 - "Questions to Ask Your Contractor"
 - Short reminder at the end that this is general guidance only.
+
 """.strip()
 
 
 def renovation_plan_tab(preferred_lang: Dict):
     st.subheader("Renovation Plan")
+
+    st.markdown("""
+    <div style="
+        font-size: 0.95rem;
+        color: #475569;
+        margin-bottom: 1.5rem;
+    ">
+        See a typical sequence of work for your project and identify decisions 
+        or preparations that may come up along the way.
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("### Areas involved")
     rooms = st.multiselect(
@@ -759,6 +859,7 @@ def renovation_plan_tab(preferred_lang: Dict):
 
     if st.button("Generate a typical reconstruction process"):
         with st.spinner("Putting together a typical sequence..."):
+            # -----USER CONTENT for prompt---#
             user_content = f"""
 ROOMS INVOLVED:
 {', '.join(rooms) if rooms else 'Not specified'}
@@ -774,6 +875,7 @@ CONTRACTOR'S SEQUENCE (if any, treat as primary):
 EXTRA NOTES:
 {extra_notes or 'None provided'}
 """.strip()
+            # -----end USER CONTENT-------#
 
             system_prompt = build_renovation_system_prompt()
             english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
@@ -858,6 +960,18 @@ OUTPUT FORMAT (English):
 
 def design_helper_tab(preferred_lang: Dict):
     st.subheader("Design Helper")
+
+    st.markdown("""
+    <div style="
+        font-size: 0.95rem;
+        color: #475569;
+        margin-bottom: 1.5rem;
+    ">
+        Explore a few practical design directions based on your room, materials, 
+        and preferences, with notes on coordination and durability.
+    </div>
+    """, unsafe_allow_html=True)
+
 
     # Room selection with unified placeholder
     room_options = [
@@ -1046,7 +1160,22 @@ def main():
     header_left, header_right = st.columns([4, 1])
 
     with header_left:
-        st.title("Home Repair Helper")
+        st.markdown("""
+        <h1 class="custom-app-title">Home Repair Helper</h1>
+        <div style="
+            font-size: 0.95rem;
+            color: #475569;
+            margin-bottom: 1.25rem;
+        ">
+            Understand insurance estimates. Plan repairs. Make design decisions.
+        </div>
+        """, unsafe_allow_html=True)
+
+
+        # st.markdown(
+        #     '<h1 class="custom-app-title">Home Repair Helper</h1>',
+        #     unsafe_allow_html=True,
+        # )
 
     with header_right:
         st.markdown(
@@ -1070,30 +1199,30 @@ def main():
         # Strong HOME-PAGE Disclaimer (only in HOME tab)
         if preferred_lang["code"] == "es":
            st.info(
-                "Esta aplicación en versión beta solo brinda orientación educativa general y puede estar "
-                "incompleta o contener errores. No puede ofrecer asesoría profesional de seguros, construcción, "
-                "seguridad ni diseño. No confíe en esta aplicación para determinar cobertura de seguros, alcance "
-                "de reparación, requisitos de seguridad, selección de materiales ni decisiones de diseño. "
-                "Siempre siga la guía de su ajustador de seguros, sus pólizas por escrito, los códigos de "
-                "construcción locales y su contratista o diseñador con licencia."
+                "Esta herramienta en versión beta solo proporciona información educativa general "
+                "y puede estar incompleta o contener errores. No ofrece asesoría profesional en "
+                "seguros, asuntos legales, construcción, seguridad ni diseño. Todas las decisiones "
+                "finales deben basarse en la guía de su contratista con licencia, diseñador, "
+                "ajustador de seguros y en los códigos de construcción y documentos de póliza aplicables."
             )
 
         else:
             st.info(
                 "This beta tool provides general educational information only and may be incomplete or "
                 "incorrect. It does not provide professional insurance, legal, construction, safety, or "
-                "design advice. Users should not rely on this tool to determine insurance coverage, repair "
-                "scope, safety requirements, material selections, or design decisions. All final decisions "
-                "must be based on the guidance of your licensed contractor, designer, insurance adjuster, "
-                "and applicable building codes and policy documents."
+                "design advice. All final decisions must be based on the guidance of your licensed contractor, "
+                "designer, insurance adjuster, and applicable building codes and policy documents."
             )
 
 
         st.subheader("Welcome")
         st.write(
-            "This tool is meant to help you better understand your home repair project "
-            "after things like water damage. It does not replace your insurance "
-            "company or your contractor."
+            "This tool is meant to help you better understand your home repair project. "
+            "It does not replace your insurance company or your contractor. This app is for "
+            "educational purposes only—its goal is to help give you peace of mind during the "
+            "process and suggest questions you might ask your insurance adjuster, contractor, "
+            "designer, or materials vendor."
+
         )
 
         st.markdown("""
