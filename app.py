@@ -49,8 +49,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-# Reduce size of white space at top of page
+# Reduce size of white space at top of page + Force white background + Set width
 st.markdown("""
 <style>
 /* Remove Streamlit's default top banner spacing */
@@ -64,32 +63,14 @@ section.main > div {
     margin-top: 0rem !important;
 }
 
-/* Control content container spacing explicitly */
-.block-container {
-    padding-top: 0.75rem !important;   /* ← intentional breathing room */
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-
-#============================
-# Force all-white background and app WIDTH
-#============================
-
-st.markdown("""
-<style>
 /* Force pure white backgrounds */
 html, body, [data-testid="stAppViewContainer"], .block-container {
     background-color: #FFFFFF !important;
 }
-</style>
-""", unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-/* Constrain content width for better readability */
+/* Control content container - all properties in one place */
 .block-container {
+    padding-top: 0.75rem !important;
     max-width: 1100px;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
@@ -97,6 +78,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ======================
+# Hide Streamlit Top-Right Menu + Footer
+# ======================
+st.markdown("""
+<style>
+/* Hide the top-right hamburger menu */
+#MainMenu {visibility: hidden !important;}
+
+/* Hide the "Made with Streamlit" footer */
+footer {visibility: hidden !important;}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ==================
@@ -189,18 +182,50 @@ h3 {
 """, unsafe_allow_html=True)
 
 
-# ======================
-# Hide Streamlit Top-Right Menu + Footer
-# ======================
+#=========================
+# HOVER EFFECT
+#========================
+
 st.markdown("""
 <style>
-/* Hide the top-right hamburger menu */
-#MainMenu {visibility: hidden !important;}
+/* Subtle hover effect on form inputs */
+input:hover, 
+textarea:hover, 
+select:hover {
+    background-color: #F8FAFC !important;
+    transition: background-color 0.2s ease;
+}
 
-/* Hide the "Made with Streamlit" footer */
-footer {visibility: hidden !important;}
+/* Hover effect for Streamlit's multiselect and selectbox */
+[data-baseweb="select"] > div:hover {
+    background-color: #F8FAFC !important;
+    transition: background-color 0.2s ease;
+}
 </style>
 """, unsafe_allow_html=True)
+
+#============================================
+# SHADE THE ACTION (GENERATE RESPONSE) BUTTONS
+#============================================
+
+st.markdown("""
+<style>
+/* Style action buttons with subtle background */
+button[kind="primary"],
+button[kind="secondary"] {
+    background-color: #F1F5F9 !important;
+    border: 1px solid #E2E8F0 !important;
+    transition: all 0.2s ease;
+}
+
+button[kind="primary"]:hover,
+button[kind="secondary"]:hover {
+    background-color: #E2E8F0 !important;
+    border-color: #CBD5E1 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 
 # ======================
@@ -1170,7 +1195,7 @@ def main():
 
     with header_left:
         st.markdown("""
-        <h1 class="custom-app-title">Home Repair Helper</h1>
+        <div class="custom-app-title">Home Repair Helper</div>
         <div style="
             font-size: 0.95rem;
             color: #475569;
@@ -1179,12 +1204,6 @@ def main():
             Understand insurance estimates. Plan repairs. Make design decisions.
         </div>
         """, unsafe_allow_html=True)
-
-
-        # st.markdown(
-        #     '<h1 class="custom-app-title">Home Repair Helper</h1>',
-        #     unsafe_allow_html=True,
-        # )
 
     with header_right:
         st.markdown(
@@ -1195,7 +1214,6 @@ def main():
 
     ## Add whitespace
     st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
-
 
     # Tabs
     tabs = st.tabs(
@@ -1227,7 +1245,6 @@ def main():
                 "designer, insurance adjuster, and applicable building codes and policy documents."
             )
 
-
         st.subheader("Welcome")
         st.write(
             "This tool is meant to help you better understand your home repair project. "
@@ -1235,14 +1252,13 @@ def main():
             "educational purposes only—its goal is to help give you peace of mind during the "
             "process and suggest questions you might ask your insurance adjuster, contractor, "
             "designer, or materials vendor."
-
         )
 
         st.markdown("""
 ### What you can do here
 
 1. **Estimate Explainer**  
-   Upload your insurance estimate (and optionally your contractor’s estimate) to see
+   Upload your insurance estimate (and optionally your contractor's estimate) to see
    a plain-English explanation plus suggested questions to ask.
 
 2. **Renovation Plan**  
