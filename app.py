@@ -53,30 +53,28 @@ st.markdown(
 # Reduce size of white space at top of page
 st.markdown("""
 <style>
-
-/* Reduce top padding of main container */
-.block-container {
-    padding-top: 0.5rem !important;
-}
-
-/* Remove extra whitespace Streamlit injects above the container */
-section.main > div {
-    padding-top: 0rem !important;
-    margin-top: 0rem !important;
-}
-
-/* Remove top margin from the app view container */
+/* Remove Streamlit's default top banner spacing */
 [data-testid="stAppViewContainer"] {
     padding-top: 0rem !important;
     margin-top: 0rem !important;
 }
 
+section.main > div {
+    padding-top: 0rem !important;
+    margin-top: 0rem !important;
+}
+
+/* Control content container spacing explicitly */
+.block-container {
+    padding-top: 0.75rem !important;   /* ← intentional breathing room */
+}
 </style>
 """, unsafe_allow_html=True)
 
 
+
 #============================
-# Force all-white background
+# Force all-white background and app WIDTH
 #============================
 
 st.markdown("""
@@ -84,6 +82,17 @@ st.markdown("""
 /* Force pure white backgrounds */
 html, body, [data-testid="stAppViewContainer"], .block-container {
     background-color: #FFFFFF !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* Constrain content width for better readability */
+.block-container {
+    max-width: 1100px;
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -140,11 +149,11 @@ st.markdown("""
 .custom-app-title {
     font-family: 'Sora', sans-serif !important;
     font-size: 2.6rem !important;
-    font-weight: 700 !important;
+    font-weight: 500 !important;
     margin: 0 0 0.25rem 0;
     padding: 0;
     line-height: 1.1;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
     color: #0F172A;  /* deep slate for a premium look */
 }
 </style>
@@ -1183,6 +1192,10 @@ def main():
             unsafe_allow_html=True,
         )
         preferred_lang = get_preferred_language()
+
+    ## Add whitespace
+    st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+
 
     # Tabs
     tabs = st.tabs(
