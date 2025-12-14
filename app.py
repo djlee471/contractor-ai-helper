@@ -184,7 +184,7 @@ st.markdown("""
 .custom-app-title {
     font-family: 'Inter', sans-serif !important;
     font-size: 2rem !important;
-    font-weight: 350 !important;
+    font-weight: 385 !important;
     margin: 0 0 0.25rem 0;
     padding: 0;
     line-height: 1.1;
@@ -1692,7 +1692,7 @@ def main():
 
     with header_left:
         st.markdown("""
-        <div class="custom-app-title">Home Repair Helper</div>
+        <div class="custom-app-title">Home Repair Assistant</div>
         <div style="
             font-size: 0.95rem;
             color: #475569;
@@ -1760,11 +1760,9 @@ def main():
 
         st.subheader("Welcome")
         st.write(
-            "This tool is meant to help you better understand your home repair project. "
-            "It does not replace your insurance company or your contractor. This app is for "
-            "educational purposes only—its goal is to help give you peace of mind during the "
-            "process and suggest questions you might ask your insurance adjuster, contractor, "
-            "designer, or materials vendor."
+            "This app is designed to help you understand your home repair project at every stage. "
+            "Use the tabs above to explore your insurance estimate, see how repairs typically unfold, "
+            "and review design considerations—so you can stay informed and prepared."
         )
 
         st.markdown("""
