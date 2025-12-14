@@ -184,7 +184,7 @@ st.markdown("""
 .custom-app-title {
     font-family: 'Inter', sans-serif !important;
     font-size: 2rem !important;
-    font-weight: 300 !important;
+    font-weight: 350 !important;
     margin: 0 0 0.25rem 0;
     padding: 0;
     line-height: 1.1;
