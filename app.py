@@ -182,14 +182,14 @@ h2, h3 {
 st.markdown("""
 <style>
 .custom-app-title {
-    font-family: 'Sora', sans-serif !important;
-    font-size: 2.6rem !important;
-    font-weight: 500 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 2rem !important;
+    font-weight: 300 !important;
     margin: 0 0 0.25rem 0;
     padding: 0;
     line-height: 1.1;
-    letter-spacing: -0.025em;
-    color: #0F172A;  /* deep slate for a premium look */
+    letter-spacing: -0.02em;
+    color: #0F172A;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1783,6 +1783,20 @@ def main():
    possible directions for materials and colors.
 """)
 
+        # FOOTER - add here, at the end of HOME tab content
+        st.markdown("<hr style='margin-top: 3rem; margin-bottom: 2rem; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+        
+        footer_col1, footer_col2, footer_col3 = st.columns([1, 2, 1])
+        with footer_col2:
+            st.markdown("""
+            <div style='text-align: center;'>
+                <img src='data:image/png;base64,{}' width='180' style='margin-bottom: -2rem;'>
+                <div style='font-size: 0.85rem; color: #64748B; margin-top: -0.5rem;'>
+                    Built by Nareum AI Studio
+                </div>
+            </div>
+            """.format(base64.b64encode(open("logo4_h.png", "rb").read()).decode()), unsafe_allow_html=True)
+
     # ---------- OTHER TABS ----------
     with tabs[1]:
         estimate_explainer_tab(preferred_lang)
@@ -1792,6 +1806,7 @@ def main():
 
     with tabs[3]:
         design_helper_tab(preferred_lang)
+
 
 if __name__ == "__main__":
     main()
