@@ -6,6 +6,12 @@ from openai import OpenAI
 from dotenv import load_dotenv   # for local .env support
 import base64
 
+# for exporting pdfs
+from fpdf import FPDF
+import urllib.parse
+
+
+
 # ======================
 # Load environment variables
 # ======================
@@ -50,6 +56,7 @@ st.markdown(
 )
 
 # Reduce size of white space at top of page + Force white background + Set width
+
 st.markdown("""
 <style>
 /* Remove Streamlit's default top banner spacing */
@@ -70,8 +77,7 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 
 /* Control content container - all properties in one place */
 .block-container {
-    padding-top: 0.0rem !important;
-    max-width: 1100px;
+    padding-top: 3rem !important;  /* Desktop - comfortable breathing room */    max-width: 1100px;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
 }
@@ -79,11 +85,12 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 /* Tighter spacing ONLY on mobile */
 @media (max-width: 768px) {
     .block-container {
-        padding-top: 0.25rem !important;  /* reduce top space on mobile */
-        padding-left: 1rem !important;     /* also reduce side padding on small screens */
+        padding-top: 2rem !important;  /* Mobile - slightly tighter */        
+        padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
 }
+
             
 </style>
 """, unsafe_allow_html=True)
@@ -216,6 +223,86 @@ h3 {
 </style>
 """, unsafe_allow_html=True)
 
+#==========================
+## TAB DESCRIPTION WHITESPACE AND FONT SIZE
+#===========================
+st.markdown("""
+<style>
+/* Custom description styling - larger since no title */
+.tab-description {
+    margin-top: 1.5rem !important;  /* Force space above */
+    margin-bottom: 2rem !important;
+    font-size: 1rem !important;
+    color: #475569 !important;
+    line-height: 1.7 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+#======================
+# NUCLEAR OPTION FOR TOP WHITE SPACE AND OTHER ATTEMPTS
+#============================
+
+# After your existing whitespace CSS, add just this:
+st.markdown("""
+<style>
+/* Fine-tune: remove any gap between app container and first element */
+div[data-testid="stVerticalBlock"] {
+    gap: 0rem !important;
+}
+
+div[data-testid="stVerticalBlock"] > div:first-child {
+    padding-top: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+#======================
+# ADD BACK SELECTIVE SPACING
+#============================
+
+st.markdown("""
+<style>
+/* Add breathing room between major UI elements */
+
+/* Space between form elements */
+[data-testid="stTextInput"],
+[data-testid="stTextArea"],
+[data-testid="stSelectbox"],
+[data-testid="stMultiSelect"] {
+    margin-bottom: 1.25rem !important;
+}
+
+/* Space between buttons and surrounding content */
+[data-testid="stButton"] {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Space around info/warning boxes */
+[data-testid="stAlert"] {
+    margin-top: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Extra space around horizontal rules */
+hr {
+    margin-top: 2rem !important;
+    margin-bottom: 2rem !important;
+}
+
+/* Space around file uploader specifically */
+[data-testid="stFileUploader"] {
+    margin-top: 0.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Space only for markdown INSIDE tabs, not at top */
+.stTabs [data-testid="stMarkdownContainer"] {
+    margin-bottom: 0.75rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 #=========================
 # HOVER EFFECT
@@ -525,7 +612,60 @@ def call_gpt_estimate_with_pdfs(
     return "\n".join(pieces).strip()
 
 
+#================================
+# EXPORT OUTPUTS HELPER FUNCTIONS
+#===============================
 
+def create_explanation_pdf(content, title, followups=None):
+    """Create a PDF with main content and optional follow-ups"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # Title
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, title, ln=True, align='C')
+    pdf.ln(5)
+    
+    # Main content - clean up markdown AND Unicode characters
+    pdf.set_font("Arial", size=11)
+    clean_content = content.replace('###', '').replace('##', '').replace('**', '').replace('*', '')
+    # Replace smart quotes and other Unicode with ASCII equivalents
+    clean_content = clean_content.replace('\u2019', "'").replace('\u2018', "'")  # smart quotes
+    clean_content = clean_content.replace('\u201c', '"').replace('\u201d', '"')  # smart double quotes
+    clean_content = clean_content.replace('\u2013', '-').replace('\u2014', '-')  # em/en dashes
+    clean_content = clean_content.replace('\u2022', '*')  # bullet points
+    pdf.multi_cell(0, 6, clean_content)
+    
+    # Follow-ups if any
+    if followups:
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "Follow-up Questions & Answers", ln=True)
+        pdf.ln(3)
+        
+        for i, followup in enumerate(followups, 1):
+            pdf.set_font("Arial", 'B', 11)
+            clean_q = followup['question'].replace('\u2019', "'").replace('\u2018', "'")
+            clean_q = clean_q.replace('\u201c', '"').replace('\u201d', '"')
+            pdf.multi_cell(0, 6, f"Q{i}: {clean_q}")
+            pdf.ln(2)
+            
+            pdf.set_font("Arial", size=11)
+            clean_answer = followup['answer'].replace('###', '').replace('##', '').replace('**', '').replace('*', '')
+            clean_answer = clean_answer.replace('\u2019', "'").replace('\u2018', "'")
+            clean_answer = clean_answer.replace('\u201c', '"').replace('\u201d', '"')
+            clean_answer = clean_answer.replace('\u2013', '-').replace('\u2014', '-')
+            clean_answer = clean_answer.replace('\u2022', '*')
+            pdf.multi_cell(0, 6, clean_answer)
+            pdf.ln(5)
+    
+    # Footer disclaimer
+    pdf.ln(5)
+    pdf.set_font("Arial", 'I', 9)
+    pdf.multi_cell(0, 5, "This is general educational information only. Always consult your insurance adjuster and contractor for final decisions.")
+    
+    return pdf.output(dest='S').encode('latin-1')
 # ======================
 # Mini-Agent A: Estimate Explainer
 # ======================
@@ -622,15 +762,10 @@ OUTPUT FORMAT (English):
 """.strip()
 
 def estimate_explainer_tab(preferred_lang: Dict):
-    st.subheader("Estimate Explainer")
 
     st.markdown("""
-    <div style="
-        font-size: 0.95rem;
-        color: #475569;
-        margin-bottom: 1.5rem;
-    ">
-        Understand what’s included in your insurance and contractor estimates, 
+    <div class="tab-description">
+        Understand what's included in your insurance and contractor estimates, 
         what key numbers mean, and which questions may be worth asking.
     </div>
     """, unsafe_allow_html=True)
@@ -691,20 +826,71 @@ def estimate_explainer_tab(preferred_lang: Dict):
 
             # Store explanation for follow-ups
             st.session_state["estimate_explanation_en"] = english_answer
+            st.session_state["estimate_translated"] = translated_answer  # ADD THIS
             st.session_state["estimate_extra_notes"] = extra_notes
 
+    # MOVE display code HERE - outside button block
+    if "estimate_explanation_en" in st.session_state and st.session_state["estimate_explanation_en"]:
         st.markdown("### Explanation")
-        st.markdown(english_answer)
+        st.markdown(st.session_state["estimate_explanation_en"])
 
-        if translated_answer:
+        if st.session_state.get("estimate_translated"):
             st.markdown("### Spanish Translation")
-            st.markdown(translated_answer)
+            st.markdown(st.session_state["estimate_translated"])
+
+        # Export buttons - indented inside the if block
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            followups = st.session_state.get("estimate_followups", [])
+            label = "Download PDF"
+            if followups:
+                label += f" (includes {len(followups)} follow-up{'s' if len(followups) > 1 else ''})"
+            
+            pdf_bytes = create_explanation_pdf(
+                st.session_state["estimate_explanation_en"],
+                "Estimate Explanation",
+                followups=followups
+            )
+            st.download_button(
+                label=label,
+                data=pdf_bytes,
+                file_name="estimate_explanation.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        
+        with col2:
+            email_body = st.session_state['estimate_explanation_en']
+            followups = st.session_state.get("estimate_followups", [])
+            if followups:
+                email_body += "\n\n--- Follow-up Q&A ---\n\n"
+                for i, f in enumerate(followups, 1):
+                    email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
+            
+            mailto_link = f"mailto:?subject=My Estimate Explanation&body={urllib.parse.quote(email_body[:2000])}"
+            st.markdown(f'''
+                <a href="{mailto_link}" target="_blank" style="text-decoration: none;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.5rem 1rem;
+                        background-color: #F1F5F9;
+                        border: 1px solid #E2E8F0;
+                        border-radius: 0.5rem;
+                        cursor: pointer;
+                        font-size: 0.875rem;
+                        font-weight: 400;
+                    ">Email This</button>
+                </a>
+            ''', unsafe_allow_html=True)
 
     # Follow-up
     st.markdown("---")
     st.markdown("#### Follow-up question about this explanation")
+        
     follow_q = st.text_input(
-        "If you want more detail about something above, type your question here."
+        "Follow-up question",
+        placeholder="If you want more detail about something above, type your question here."
     )
     
     if st.button("Ask follow-up"):
@@ -724,10 +910,18 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 with st.spinner("Generating follow-up explanation..."):
                     follow_system = build_estimate_system_prompt() + """
 
-You are answering a follow-up question. Be consistent with your previous explanation.
-You have access to the original estimate PDFs again, so you can reference specific
-line items, numbers, or details if the user asks about them.
-Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents.
+You are answering a follow-up question about an estimate explanation you already provided.
+
+CRITICAL INSTRUCTIONS:
+- Do NOT regenerate or rewrite the entire explanation
+- Do NOT repeat information already covered in the previous explanation
+- ONLY provide additional detail, clarification, or specific information about what the user asked
+- Keep your response focused and concise (2-4 paragraphs maximum)
+- You have access to the original estimate PDFs again, so you can reference specific line items, numbers, or details if the user asks about them
+- If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
+- Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
+
+Your goal is to ADD to the conversation, not restart it.
 """.strip()
 
                     # Build follow-up notes including previous explanation
@@ -771,11 +965,21 @@ ORIGINAL NOTES FROM USER:
                         follow_en, preferred_lang["code"]
                     )
 
-                st.markdown("##### Follow-up answer")
-                st.markdown(follow_en)
-                if follow_es:
-                    st.markdown("##### Spanish Translation")
-                    st.markdown(follow_es)
+                # Storage code - OUTSIDE spinner
+                if "estimate_followups" not in st.session_state:
+                    st.session_state["estimate_followups"] = []
+                
+                st.session_state["estimate_followups"].append({
+                    "question": follow_q,
+                    "answer": follow_en
+                })
+
+            # Display - OUTSIDE spinner, OUTSIDE else, but INSIDE the button block (3 indents)
+            st.markdown("##### Follow-up answer")
+            st.markdown(follow_en)
+            if follow_es:
+                st.markdown("##### Spanish Translation")
+                st.markdown(follow_es)
 
     # Full disclaimers at bottom
     st.markdown("---")
@@ -835,14 +1039,8 @@ OUTPUT FORMAT (English):
 
 
 def renovation_plan_tab(preferred_lang: Dict):
-    st.subheader("Renovation Plan")
-
     st.markdown("""
-    <div style="
-        font-size: 0.95rem;
-        color: #475569;
-        margin-bottom: 1.5rem;
-    ">
+    <div class="tab-description">
         See a typical sequence of work for your project and identify decisions 
         or preparations that may come up along the way.
     </div>
@@ -853,13 +1051,14 @@ def renovation_plan_tab(preferred_lang: Dict):
         "Select all areas that apply",
         [
             "Living room",
-            "Loft",
             "Kitchen",
             "Bathroom",
             "Bedroom",
+            "Loft",
             "Laundry room",
             "Hallway",
             "Stairs",
+            "Garage",
             "Exterior",
             "Other",
         ],
@@ -950,12 +1149,141 @@ EXTRA NOTES:
             english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
             translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
 
-        st.markdown("### Typical plan")
-        st.markdown(english_answer)
+            # NEW: Store for follow-ups
+            st.session_state["renovation_explanation_en"] = english_answer
+            st.session_state["renovation_translated"] = translated_answer
+            st.session_state["renovation_inputs"] = {
+                "rooms": rooms,
+                "other_rooms": other_rooms,
+                "work_types": work_types,
+                "other_work": other_work,
+                "contractor_sequence": contractor_sequence,
+                "extra_notes": extra_notes,
+            }
 
-        if translated_answer:
+    # MOVE display code HERE - outside button block
+    if "renovation_explanation_en" in st.session_state and st.session_state["renovation_explanation_en"]:
+        st.markdown("### Typical plan")
+        st.markdown(st.session_state["renovation_explanation_en"])
+        
+        if st.session_state.get("renovation_translated"):
             st.markdown("### Spanish Translation")
-            st.markdown(translated_answer)
+            st.markdown(st.session_state["renovation_translated"])
+        
+        # Export buttons
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            followups = st.session_state.get("renovation_followups", [])
+            label = "Download PDF"
+            if followups:
+                label += f" (includes {len(followups)} follow-up{'s' if len(followups) > 1 else ''})"
+            
+            pdf_bytes = create_explanation_pdf(
+                st.session_state["renovation_explanation_en"],
+                "Renovation Plan",
+                followups=followups
+            )
+            st.download_button(
+                label=label,
+                data=pdf_bytes,
+                file_name="renovation_plan.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        
+        with col2:
+            email_body = st.session_state['renovation_explanation_en']
+            followups = st.session_state.get("renovation_followups", [])
+            if followups:
+                email_body += "\n\n--- Follow-up Q&A ---\n\n"
+                for i, f in enumerate(followups, 1):
+                    email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
+            
+            mailto_link = f"mailto:?subject=My Renovation Plan&body={urllib.parse.quote(email_body[:2000])}"
+            st.markdown(f'''
+                <a href="{mailto_link}" target="_blank" style="text-decoration: none;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.5rem 1rem;
+                        background-color: #F1F5F9;
+                        border: 1px solid #E2E8F0;
+                        border-radius: 0.5rem;
+                        cursor: pointer;
+                        font-size: 0.875rem;
+                        font-weight: 400;
+                    ">Email This</button>
+                </a>
+            ''', unsafe_allow_html=True)
+    # Follow-up section (no expander needed!)
+    st.markdown("---")
+    st.markdown("#### Follow-up question about this plan")
+    
+    follow_q_reno = st.text_input(
+        "Follow-up question",
+        key="reno_followup_input",
+        placeholder="If you want more detail about the sequence or timeline, type your question here."
+    )
+
+    if st.button("Ask follow-up", key="reno_followup_btn"):
+        if not follow_q_reno:
+            st.warning("Please type a question.")
+        else:
+            prev_expl = st.session_state.get("renovation_explanation_en", "")
+            prev_inputs = st.session_state.get("renovation_inputs", {})
+            
+            if not prev_expl:
+                st.warning("Please generate a plan first.")
+            else:
+                with st.spinner("Thinking about your follow-up question..."):
+                    follow_system = build_renovation_system_prompt() + """
+
+You are answering a follow-up question about a renovation plan you already provided.
+
+CRITICAL INSTRUCTIONS:
+- Do NOT regenerate or rewrite the entire plan
+- Do NOT repeat information already covered in the previous plan
+- ONLY provide additional detail, clarification, or new information specifically about what the user asked
+- Keep your response focused and concise (2-4 paragraphs maximum)
+- If the topic was already covered in the original plan, acknowledge that and provide deeper detail or different angles on that specific aspect
+
+Your goal is to ADD to the conversation, not restart it.
+""".strip()
+
+                    follow_notes = f"""
+PREVIOUS PLAN (for context):
+{prev_expl}
+
+ORIGINAL PROJECT DETAILS:
+Rooms: {', '.join(prev_inputs.get('rooms', [])) or 'Not specified'}
+Other rooms: {prev_inputs.get('other_rooms', '') or 'None'}
+Work types: {', '.join(prev_inputs.get('work_types', [])) or 'Not specified'}
+Other work: {prev_inputs.get('other_work', '') or 'None'}
+Contractor sequence: {prev_inputs.get('contractor_sequence', '') or 'None provided'}
+Extra notes: {prev_inputs.get('extra_notes', '') or 'None provided'}
+
+USER'S FOLLOW-UP QUESTION:
+{follow_q_reno}
+""".strip()
+
+                    follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
+                    follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+
+                # Storage code - OUTSIDE spinner
+                if "renovation_followups" not in st.session_state:
+                    st.session_state["renovation_followups"] = []
+                
+                st.session_state["renovation_followups"].append({
+                    "question": follow_q_reno,
+                    "answer": follow_en
+                })
+
+            # Display - OUTSIDE spinner, OUTSIDE else, INSIDE button block
+            st.markdown("##### Follow-up answer")
+            st.markdown(follow_en)
+            if follow_es:
+                st.markdown("##### Spanish Translation")
+                st.markdown(follow_es)
 
     # Full disclaimers at bottom
     st.markdown("---")
@@ -1028,30 +1356,28 @@ OUTPUT FORMAT (English):
 
 
 def design_helper_tab(preferred_lang: Dict):
-    st.subheader("Design Helper")
 
     st.markdown("""
-    <div style="
-        font-size: 0.95rem;
-        color: #475569;
-        margin-bottom: 1.5rem;
-    ">
+    <div class="tab-description">
         Explore a few practical design directions based on your room, materials, 
         and preferences, with notes on coordination and durability.
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("### Tell me about your project")
 
     # Room selection with unified placeholder
     room_options = [
         "Select...",
-        "Laundry room",
-        "Hallway",
-        "Bedroom",
-        "Stairs",
         "Living room",
         "Kitchen",
         "Bathroom",
+        "Bedroom",
+        "Loft",
+        "Laundry room",
+        "Hallway",
+        "Stairs",
+        "Garage"
         "Other",
     ]
     room_choice = st.selectbox("Which room is this for?", room_options, index=0)
@@ -1066,10 +1392,10 @@ def design_helper_tab(preferred_lang: Dict):
         [
             "Tile",
             "Carpet",
-            "LVP (luxury vinyl plank)",
             "Laminate",
             "Hardwood",
-            "Paint color only",
+            "LVP (luxury vinyl plank)",
+            "Paint color",
             "Cabinets",
             "Countertops",
             "Backsplash",
@@ -1198,12 +1524,148 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
             english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
             translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
 
-        st.markdown("### Suggestions")
-        st.markdown(english_answer)
+# NEW: Store for follow-ups
+            st.session_state["design_explanation_en"] = english_answer
+            st.session_state["design_translated"] = translated_answer  # ADD THIS LINE
+            st.session_state["design_inputs"] = {
+                "room": room,
+                "materials": materials,
+                "other_materials": other_materials,
+                "existing_finishes": existing_finishes,
+                "style_pref": style_pref,
+                "contrast_pref": contrast_pref,
+                "traffic_info": traffic_info,
+                "contractor_design_notes": contractor_design_notes,
+                "extra_notes": extra_notes,
+            }
 
-        if translated_answer:
+# MOVE display code HERE - outside button block
+    if "design_explanation_en" in st.session_state and st.session_state["design_explanation_en"]:
+        st.markdown("### Suggestions")
+        st.markdown(st.session_state["design_explanation_en"])
+        
+        if st.session_state.get("design_translated"):
             st.markdown("### Spanish Translation")
-            st.markdown(translated_answer)
+            st.markdown(st.session_state["design_translated"])
+        
+        # Export buttons
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            followups = st.session_state.get("design_followups", [])
+            label = "Download PDF"
+            if followups:
+                label += f" (includes {len(followups)} follow-up{'s' if len(followups) > 1 else ''})"
+            
+            pdf_bytes = create_explanation_pdf(
+                st.session_state["design_explanation_en"],
+                "Design Suggestions",
+                followups=followups
+            )
+            st.download_button(
+                label=label,
+                data=pdf_bytes,
+                file_name="design_suggestions.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        
+        with col2:
+            email_body = st.session_state['design_explanation_en']
+            followups = st.session_state.get("design_followups", [])
+            if followups:
+                email_body += "\n\n--- Follow-up Q&A ---\n\n"
+                for i, f in enumerate(followups, 1):
+                    email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
+            
+            mailto_link = f"mailto:?subject=My Design Suggestions&body={urllib.parse.quote(email_body[:2000])}"
+            st.markdown(f'''
+                <a href="{mailto_link}" target="_blank" style="text-decoration: none;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.5rem 1rem;
+                        background-color: #F1F5F9;
+                        border: 1px solid #E2E8F0;
+                        border-radius: 0.5rem;
+                        cursor: pointer;
+                        font-size: 0.875rem;
+                        font-weight: 400;
+                    ">Email This</button>
+                </a>
+            ''', unsafe_allow_html=True)
+
+    # Follow-up section
+    st.markdown("---")
+    st.markdown("#### Follow-up question about these design suggestions")
+        
+    follow_q_design = st.text_input(
+        "Follow-up question",
+        key="design_followup_input",
+        placeholder="If you want to explore specific color combinations or materials further, type your question here."
+    )
+    
+    if st.button("Ask follow-up", key="design_followup_btn"):
+        if not follow_q_design:
+            st.warning("Please type a question.")
+        else:
+            prev_expl = st.session_state.get("design_explanation_en", "")
+            prev_inputs = st.session_state.get("design_inputs", {})
+            
+            if not prev_expl:
+                st.warning("Please generate design suggestions first.")
+            else:
+                with st.spinner("Thinking about your follow-up question..."):
+                    follow_system = build_design_system_prompt() + """
+
+You are answering a follow-up question about design suggestions you already provided.
+
+CRITICAL INSTRUCTIONS:
+- Do NOT regenerate or rewrite the entire suggestion
+- Do NOT repeat information already covered in the previous suggestions
+- ONLY provide additional detail, alternative options, or clarification specifically about what the user asked
+- Keep your response focused and concise (2-4 paragraphs maximum)
+- If the topic was already covered in the original suggestions, acknowledge that and provide deeper detail, specific examples, or different perspectives on that aspect
+
+Your goal is to ADD to the conversation, not restart it.
+""".strip()
+
+                    follow_notes = f"""
+PREVIOUS SUGGESTIONS (for context):
+{prev_expl}
+
+ORIGINAL DESIGN DETAILS:
+Room: {prev_inputs.get('room', '') or 'Not specified'}
+Materials: {', '.join(prev_inputs.get('materials', [])) or 'Not specified'}
+Other materials: {prev_inputs.get('other_materials', '') or 'None'}
+Existing finishes: {prev_inputs.get('existing_finishes', '') or 'Not specified'}
+Style preference: {prev_inputs.get('style_pref', '') or 'Not specified'}
+Contrast preference: {prev_inputs.get('contrast_pref', '') or 'Not specified'}
+Traffic/users: {prev_inputs.get('traffic_info', '') or 'Not specified'}
+Contractor suggestions: {prev_inputs.get('contractor_design_notes', '') or 'None provided'}
+Extra notes: {prev_inputs.get('extra_notes', '') or 'None provided'}
+
+USER'S FOLLOW-UP QUESTION:
+{follow_q_design}
+""".strip()
+
+                    follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
+                    follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+
+                # Storage code - OUTSIDE spinner
+                if "design_followups" not in st.session_state:
+                    st.session_state["design_followups"] = []
+                
+                st.session_state["design_followups"].append({
+                    "question": follow_q_design,
+                    "answer": follow_en
+                })
+
+            # Display - OUTSIDE spinner, OUTSIDE else, INSIDE button block
+            st.markdown("##### Follow-up answer")
+            st.markdown(follow_en)
+            if follow_es:
+                st.markdown("##### Spanish Translation")
+                st.markdown(follow_es)
 
     # Full disclaimers at bottom
     st.markdown("---")
@@ -1248,7 +1710,7 @@ def main():
         preferred_lang = get_preferred_language()
 
     ## Add whitespace
-    st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
 
     # Tabs
     tabs = st.tabs(
@@ -1260,25 +1722,41 @@ def main():
         ]
     )
 
-    # ---------- HOME TAB ----------
+# ---------- HOME TAB ----------
     with tabs[0]:
         # Strong HOME-PAGE Disclaimer (only in HOME tab)
         if preferred_lang["code"] == "es":
-           st.info(
-                "Esta herramienta en versión beta solo proporciona información educativa general "
-                "y puede estar incompleta o contener errores. No ofrece asesoría profesional en "
-                "seguros, asuntos legales, construcción, seguridad ni diseño. Todas las decisiones "
-                "finales deben basarse en la guía de su contratista con licencia, diseñador, "
-                "ajustador de seguros y en los códigos de construcción y documentos de póliza aplicables."
-            )
+            st.markdown("""
+            <div style="
+                background-color: #F8FAFC;
+                border-left: 3px solid #94A3B8;
+                padding: 1rem 1.25rem;
+                margin: 1.5rem 0 2rem 0;
+                border-radius: 0.375rem;
+            ">
+            Esta herramienta en versión beta solo proporciona información educativa general 
+            y puede estar incompleta o contener errores. No ofrece asesoría profesional en 
+            seguros, asuntos legales, construcción, seguridad ni diseño. Todas las decisiones 
+            finales deben basarse en la guía de su contratista con licencia, diseñador, 
+            ajustador de seguros y en los códigos de construcción y documentos de póliza aplicables.
+            </div>
+            """, unsafe_allow_html=True)
 
         else:
-            st.info(
-                "This beta tool provides general educational information only and may be incomplete or "
-                "incorrect. It does not provide professional insurance, legal, construction, safety, or "
-                "design advice. All final decisions must be based on the guidance of your licensed contractor, "
-                "designer, insurance adjuster, and applicable building codes and policy documents."
-            )
+            st.markdown("""
+            <div style="
+                background-color: #F8FAFC;
+                border-left: 3px solid #94A3B8;
+                padding: 1rem 1.25rem;
+                margin: 1.5rem 0 2rem 0;
+                border-radius: 0.375rem;
+            ">
+            This beta tool provides general educational information only and may be incomplete or 
+            incorrect. It does not provide professional insurance, legal, construction, safety, or 
+            design advice. All final decisions must be based on the guidance of your licensed contractor, 
+            designer, insurance adjuster, and applicable building codes and policy documents.
+            </div>
+            """, unsafe_allow_html=True)
 
         st.subheader("Welcome")
         st.write(
