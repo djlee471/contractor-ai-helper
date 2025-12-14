@@ -1772,7 +1772,7 @@ def main():
 
 1. **Estimate Explainer**  
    Upload your insurance estimate (and optionally your contractor's estimate) to see
-   a plain-English explanation plus suggested questions to ask.
+   a clear, easy-to-understand explanation plus suggested questions to ask.
 
 2. **Renovation Plan**  
    Describe which rooms and types of work are involved, and get a typical order
