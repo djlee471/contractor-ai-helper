@@ -141,11 +141,11 @@ footer {
 st.markdown("""
 <style>
 /* Load Inter (UI/body) + Sora (app title) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Sora:wght@500;600;700&display=swap');
 
-/* Apply Inter to most UI text */
+/* Apply Manrope to most UI text */
 html, body, div, span, input, textarea, button, select, label, p, li, ul, ol, [class], * {
-    font-family: "Inter", sans-serif !important;
+    font-family: "Manrope", sans-serif !important;
 }
 
 /* Optional: slightly improve default text rendering */
@@ -182,7 +182,7 @@ h2, h3 {
 st.markdown("""
 <style>
 .custom-app-title {
-    font-family: 'Inter', sans-serif !important;
+    font-family: 'Sora', sans-serif !important;
     font-size: 2rem !important;
     font-weight: 385 !important;
     margin: 0 0 0.25rem 0;
@@ -326,28 +326,66 @@ select:hover {
 </style>
 """, unsafe_allow_html=True)
 
-#============================================
-# SHADE THE ACTION (GENERATE RESPONSE) BUTTONS
-#============================================
-
 st.markdown("""
 <style>
-/* Style action buttons with subtle background */
-button[kind="primary"],
-button[kind="secondary"] {
+/* ===== Unified button styling (Streamlit buttons + download buttons) ===== */
+[data-testid="stButton"] button,
+[data-testid="stDownloadButton"] button {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    font-family: "Inter", sans-serif !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    line-height: 1.15 !important;
+
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+
+    min-height: 44px !important; /* consistent height */
+
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
-    transition: all 0.2s ease;
+    border-radius: 0.5rem !important;
+
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-button[kind="primary"]:hover,
-button[kind="secondary"]:hover {
+/* Hover styling */
+[data-testid="stButton"] button:hover,
+[data-testid="stDownloadButton"] button:hover {
     background-color: #E2E8F0 !important;
     border-color: #CBD5E1 !important;
 }
+
+/* Center/normalize label rendering (both button types) */
+[data-testid="stButton"] button > div,
+[data-testid="stButton"] button > span,
+[data-testid="stDownloadButton"] button > div,
+[data-testid="stDownloadButton"] button > span {
+    line-height: 1.15 !important;
+    transform: translateY(3px) !important;
+}
+
+/* ===== Keep the two action buttons level in the same row ===== */
+[data-testid="stHorizontalBlock"] {
+    align-items: flex-end !important;
+}
+
+/* Remove wrapper margins that cause drift between download + regular buttons */
+[data-testid="stButton"],
+[data-testid="stDownloadButton"] {
+    margin: 0 !important;
+}
+
+[data-testid="stButton"] > div,
+[data-testid="stDownloadButton"] > div {
+    margin: 0 !important;
+    padding: 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 
 # ======================
@@ -629,7 +667,12 @@ def create_explanation_pdf(content, title, followups=None):
     
     # Main content - clean up markdown AND Unicode characters
     pdf.set_font("Arial", size=11)
-    clean_content = content.replace('###', '').replace('##', '').replace('**', '').replace('*', '')
+    clean_content = (
+        content
+        .replace('###', '')
+        .replace('##', '')
+        .replace('**', '')
+    )
     # Replace smart quotes and other Unicode with ASCII equivalents
     clean_content = clean_content.replace('\u2019', "'").replace('\u2018', "'")  # smart quotes
     clean_content = clean_content.replace('\u201c', '"').replace('\u201d', '"')  # smart double quotes
@@ -739,6 +782,23 @@ PRICE AND ALLOWANCE QUESTIONS:
      - "You may want to ask, 'What is my material allowance per square foot for tile and carpet,
         and how are any overages calculated?'"
 
+COMPLETENESS CHECK (CRITICAL):
+Before you summarize flooring/material costs, scan the ENTIRE document for all related line items,
+even if they appear under different “areas” or on “CONTINUED” pages.
+
+For CARPET specifically, you MUST look for and include costs from:
+- Stairs / stair landings / “Stairs (A1)” / “Landing” / “Hallway” / “Closet” / “Subroom”
+- Any “CONTINUED - <Area>” sections on the next page
+- Items that are not labeled as “carpet” but are part of carpet scope, such as:
+  - “R&R Carpet pad”
+  - “Remove Carpet” / “Remove Carpet pad”
+  - Stair-specific labor such as “step charge” or “waterfall” installation
+  - Transitions / thresholds (if present)
+
+After you list carpet numbers, do a quick cross-check:
+- If any area in the document contains “carpet” / “pad” / “step charge” / “waterfall”, it must be reflected
+  either in the carpet section or explicitly stated as “found in <Area>: <line item>”.
+
 GOALS:
 1. Explain major sections of the estimate in plain English, grouped by room/area when possible.
 2. Identify decisions the homeowner needs to make (materials, rooms/areas, scope choices).
@@ -753,9 +813,17 @@ OUTPUT FORMAT (English):
 - Short intro
 - "Summary by Area"
 - "Summary by material / task type" (if helpful)
+- Under “Summary by Material / Task Type”, include a short note for each material indicating which areas it was found in.
 - "Decisions You May Need to Make"
 - A section called "Key Numbers From Your Estimate" where you list important totals and unit prices you found (even if incomplete).
 - If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
+TYPICAL MARKET RANGES FORMATTING (STRICT):
+    - Use plain ASCII characters only.
+    - Do NOT use italics, bold, code, or markdown formatting.
+    - Write ranges using a simple hyphen with spaces on both sides.
+    - Format exactly like: "1.50 - 4.00 per sq. ft."
+    - Do NOT use en dashes (–) or em dashes (—).
+    - Always include two decimal places.
 - "Questions to Ask Your Adjuster"
 - "Questions to Ask Your Contractor"
 - End with a short reminder that this is general information only.
@@ -820,6 +888,10 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 extra_notes=extra_notes or "",
                 max_output_tokens=1100,
             )
+
+            # ✅ Normalize unicode dashes for consistent on-screen rendering (and PDF/email)
+            english_answer = english_answer.replace("–", "-").replace("—", "-")
+                                                          
             translated_answer = translate_if_needed(
                 english_answer, preferred_lang["code"]
             )
@@ -869,20 +941,11 @@ def estimate_explainer_tab(preferred_lang: Dict):
                     email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
             
             mailto_link = f"mailto:?subject=My Estimate Explanation&body={urllib.parse.quote(email_body[:2000])}"
-            st.markdown(f'''
-                <a href="{mailto_link}" target="_blank" style="text-decoration: none;">
-                    <button style="
-                        width: 100%;
-                        padding: 0.5rem 1rem;
-                        background-color: #F1F5F9;
-                        border: 1px solid #E2E8F0;
-                        border-radius: 0.5rem;
-                        cursor: pointer;
-                        font-size: 0.875rem;
-                        font-weight: 400;
-                    ">Email This</button>
-                </a>
-            ''', unsafe_allow_html=True)
+            if st.button("Email This", key="email_estimate_btn", use_container_width=True):
+                st.markdown(
+                    f"<meta http-equiv='refresh' content='0; url={mailto_link}'>",
+                    unsafe_allow_html=True,
+                )
 
     # Follow-up (ONLY show after initial explanation exists)
     if st.session_state.get("estimate_explanation_en"):
@@ -1116,7 +1179,6 @@ def renovation_plan_tab(preferred_lang: Dict):
     default=[],
 )
 
-
     other_work = ""
     if "Other" in work_types:
         other_work = st.text_input("Describe other work needed:")
@@ -1132,8 +1194,15 @@ def renovation_plan_tab(preferred_lang: Dict):
     )
 
     if st.button("Generate a typical reconstruction process"):
+        if not rooms or not work_types:
+            st.warning("Please add at least one room and one type of work so I can tailor the overview.")
+            return
+    
         with st.spinner("Putting together a typical sequence..."):
-            # -----USER CONTENT for prompt---#
+
+#==================================
+# -----USER CONTENT for prompt---#
+#===================================
             user_content = f"""
 ROOMS INVOLVED:
 {', '.join(rooms) if rooms else 'Not specified'}
@@ -1207,20 +1276,12 @@ EXTRA NOTES:
                     email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
             
             mailto_link = f"mailto:?subject=My Renovation Plan&body={urllib.parse.quote(email_body[:2000])}"
-            st.markdown(f'''
-                <a href="{mailto_link}" target="_blank" style="text-decoration: none;">
-                    <button style="
-                        width: 100%;
-                        padding: 0.5rem 1rem;
-                        background-color: #F1F5F9;
-                        border: 1px solid #E2E8F0;
-                        border-radius: 0.5rem;
-                        cursor: pointer;
-                        font-size: 0.875rem;
-                        font-weight: 400;
-                    ">Email This</button>
-                </a>
-            ''', unsafe_allow_html=True)
+
+            if st.button("Email This", key="email_reno_btn", use_container_width=True):
+                st.markdown(
+                    f"<meta http-equiv='refresh' content='0; url={mailto_link}'>",
+                    unsafe_allow_html=True,
+                )
 
 
     # Follow-up section (no expander needed!)
@@ -1400,37 +1461,6 @@ def design_helper_tab(preferred_lang: Dict):
     if room == "Other":
         room = st.text_input("Describe the room:", placeholder="Example: guest room, loft, etc.")
 
-    # Materials being chosen – starts empty by default
-    materials = st.multiselect(
-        "Select materials (choose one or more)",
-        [
-            "Tile",
-            "Carpet",
-            "Laminate",
-            "Hardwood",
-            "LVP (luxury vinyl plank)",
-            "Paint color",
-            "Cabinets",
-            "Countertops",
-            "Backsplash",
-            "Baseboards / trim",
-            "Lighting",
-            "Other",
-        ],
-        default=[],
-    )
-    other_materials = ""
-    if "Other" in materials:
-        other_materials = st.text_input("Describe other materials:")
-
-    existing_finishes = st.text_input(
-        "Colors of existing finishes (walls, floors, cabinets, etc.)",
-        help=(
-            "Example: 'Greek Villa walls, medium brown wood floor, white shaker cabinets,' "
-            "or 'light gray tile, dark gray grout, black hardware.'"
-        ),
-    )
-
 
     # Style preference with unified placeholder
     style_options = [
@@ -1457,6 +1487,37 @@ def design_helper_tab(preferred_lang: Dict):
         index=0,
     )
     contrast_pref = "" if contrast_choice == "Select..." else contrast_choice
+
+    # Materials being chosen – starts empty by default
+    materials = st.multiselect(
+        "Select materials (choose one or more)",
+        [
+            "Tile",
+            "Carpet",
+            "Laminate",
+            "Hardwood",
+            "LVP (luxury vinyl plank)",
+            "Paint color",
+            "Cabinets",
+            "Countertops",
+            "Backsplash",
+            "Baseboards / trim",
+            "Lighting",
+            "Other",
+        ],
+        default=[],
+    )
+    other_materials = ""
+    if "Other" in materials:
+        other_materials = st.text_input("Describe other materials:")
+
+    existing_finishes = st.text_input(
+        "Colors of existing finishes, such as walls, floors, cabinets, etc. (Optional)",
+        help=(
+            "Example: 'Greek Villa walls, medium brown wood floor, white shaker cabinets,' "
+            "or 'light gray tile, dark gray grout, black hardware.'"
+        ),
+    )
 
     # Traffic/use with unified placeholder
     traffic_options = [
@@ -1497,8 +1558,8 @@ def design_helper_tab(preferred_lang: Dict):
 
     if st.button("Suggest some design directions"):
         # Basic validation: need at least a room and one material
-        if not room or not materials:
-            st.warning("Please select a room and at least one material before asking for suggestions.")
+        if not room or not materials or not style_pref or not contrast_pref:
+            st.warning("Please select a room, at least one material, a style preference, and a contrast preference so I can provide some suggestions.")
             return
 
         with st.spinner("Thinking through some options..."):
@@ -1593,20 +1654,12 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
                     email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
             
             mailto_link = f"mailto:?subject=My Design Suggestions&body={urllib.parse.quote(email_body[:2000])}"
-            st.markdown(f'''
-                <a href="{mailto_link}" target="_blank" style="text-decoration: none;">
-                    <button style="
-                        width: 100%;
-                        padding: 0.5rem 1rem;
-                        background-color: #F1F5F9;
-                        border: 1px solid #E2E8F0;
-                        border-radius: 0.5rem;
-                        cursor: pointer;
-                        font-size: 0.875rem;
-                        font-weight: 400;
-                    ">Email This</button>
-                </a>
-            ''', unsafe_allow_html=True)
+
+            if st.button("Email This", key="email_design_btn", use_container_width=True):
+                st.markdown(
+                    f"<meta http-equiv='refresh' content='0; url={mailto_link}'>",
+                    unsafe_allow_html=True,
+                )
 
     # Follow-up (ONLY show after initial suggestions exist)
     if st.session_state.get("design_explanation_en"):
@@ -1715,7 +1768,7 @@ def main():
         <div style="
             font-size: 0.95rem;
             color: #475569;
-            margin-bottom: 1.25rem;
+            margin-bottom: 3rem;
         ">
             Understand insurance estimates. Plan repairs. Make design decisions.
         </div>
