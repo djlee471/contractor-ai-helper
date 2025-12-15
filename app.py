@@ -77,7 +77,8 @@ html, body, [data-testid="stAppViewContainer"], .block-container {
 
 /* Control content container - all properties in one place */
 .block-container {
-    padding-top: 3rem !important;  /* Desktop - comfortable breathing room */    max-width: 1100px;
+    padding-top: 3rem !important;  /* Desktop - comfortable breathing room */    
+    max-width: 1100px;
     padding-left: 2.5rem;
     padding-right: 2.5rem;
 }
@@ -193,6 +194,29 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+#===========================
+## WHITESPACE formatting. ADJUST ONE VALUE HERE TO CHANGE WHITE SPACE BETWEEN TITLE/DESCRIPTION AND TABS
+#=========================
+st.markdown("""
+<style>
+/* Subtitle under the main title (Row 1 in main()) */
+.header-subtitle {
+    font-size: 0.95rem;
+    color: #475569;
+    margin-top: 0.25rem;
+    margin-bottom: 3rem;  /* adjust this to control header→tabs spacing */
+}
+
+/* Language label above the selectbox (Row 2 right column) */
+.lang-label {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 0.35rem 0;   /* clean, non-brittle spacing */
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 
 #=========================================
@@ -335,7 +359,7 @@ st.markdown("""
     align-items: center !important;
     justify-content: center !important;
 
-    font-family: "Inter", sans-serif !important;
+    font-family: "Manrope", sans-serif !important;
     font-size: 0.875rem !important;
     font-weight: 400 !important;
     line-height: 1.15 !important;
@@ -438,7 +462,9 @@ def get_preferred_language() -> Dict:
         "",
         language_labels,
         index=default_index,
+        key="preferred_lang_select",
     )
+
     return next(lang for lang in SUPPORTED_LANGUAGES if lang["label"] == preferred_label)
 
 
@@ -1452,7 +1478,7 @@ def design_helper_tab(preferred_lang: Dict):
         "Laundry room",
         "Hallway",
         "Stairs",
-        "Garage"
+        "Garage",
         "Other",
     ]
     room_choice = st.selectbox("Which room is this for?", room_options, index=0)
@@ -1759,32 +1785,22 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
-    # Header row: title on the left, language dropdown on the right
-    header_left, header_right = st.columns([4, 1])
+    # Row 1: Title (left) + language (right)
+    header_left, header_right = st.columns([4, 1], vertical_alignment="top")
 
     with header_left:
         st.markdown("""
-        <div class="custom-app-title">Home Repair Assistant</div>
-        <div style="
-            font-size: 0.95rem;
-            color: #475569;
-            margin-bottom: 3rem;
-        ">
-            Understand insurance estimates. Plan repairs. Make design decisions.
-        </div>
+            <div class="custom-app-title">Home Repair Assistant</div>
+            <div class="header-subtitle">
+                Understand insurance estimates. Plan repairs. Make design decisions.
+            </div>
         """, unsafe_allow_html=True)
 
     with header_right:
-        st.markdown(
-            "<div style='font-size: 13px; color: #666; margin-bottom: -6px;'>Preferred language for responses</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div class='lang-label'>Preferred language for responses</div>", unsafe_allow_html=True)
         preferred_lang = get_preferred_language()
 
-    ## Add whitespace
-    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
-
-    # Tabs
+    # Row 2: Tabs (full width)
     tabs = st.tabs(
         [
             "HOME",
