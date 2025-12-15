@@ -884,102 +884,108 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 </a>
             ''', unsafe_allow_html=True)
 
-    # Follow-up
-    st.markdown("---")
-    st.markdown("#### Follow-up question about this explanation")
-        
-    follow_q = st.text_input(
-        "Follow-up question",
-        placeholder="If you want more detail about something above, type your question here."
-    )
+    # Follow-up (ONLY show after initial explanation exists)
+    if st.session_state.get("estimate_explanation_en"):
+        st.markdown("---")
+        st.markdown("#### Follow-up question about this explanation")
+
+        # --- KEEP your existing follow-up UI + logic here ---
+        follow_q = st.text_input(
+            "Follow-up question",
+            placeholder="If you want more detail about something above, type your question here."
+        )
     
-    if st.button("Ask follow-up"):
-        if not follow_q:
-            st.warning("Please type a question.")
-        else:
-            prev_expl = st.session_state.get("estimate_explanation_en", "")
-            extra_prev = st.session_state.get("estimate_extra_notes", "")
-            
-            # RETRIEVE stored PDFs
-            insurance_pdf_data = st.session_state.get("estimate_insurance_pdfs", [])
-            contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
-
-            if not prev_expl and not insurance_pdf_data:
-                st.warning("Please run an explanation first.")
+        if st.button("Ask follow-up"):
+            if not follow_q:
+                st.warning("Please type a question.")
             else:
-                with st.spinner("Generating follow-up explanation..."):
-                    follow_system = build_estimate_system_prompt() + """
-
-You are answering a follow-up question about an estimate explanation you already provided.
-
-CRITICAL INSTRUCTIONS:
-- Do NOT regenerate or rewrite the entire explanation
-- Do NOT repeat information already covered in the previous explanation
-- ONLY provide additional detail, clarification, or specific information about what the user asked
-- Keep your response focused and concise (2-4 paragraphs maximum)
-- You have access to the original estimate PDFs again, so you can reference specific line items, numbers, or details if the user asks about them
-- If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
-- Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
-
-Your goal is to ADD to the conversation, not restart it.
-""".strip()
-
-                    # Build follow-up notes including previous explanation
-                    follow_notes = f"""
-PREVIOUS EXPLANATION (for context):
-{prev_expl}
-
-USER'S FOLLOW-UP QUESTION:
-{follow_q}
-
-ORIGINAL NOTES FROM USER:
-{extra_prev or 'None provided'}
-""".strip()
-
-                    # RECONSTRUCT file-like objects from stored bytes
-                    from io import BytesIO
-                    
-                    insurance_files_reconstructed = []
-                    for pdf_data in insurance_pdf_data:
-                        file_obj = BytesIO(pdf_data["bytes"])
-                        file_obj.name = pdf_data["name"]
-                        file_obj.type = pdf_data["type"]
-                        insurance_files_reconstructed.append(file_obj)
-                    
-                    contractor_files_reconstructed = []
-                    for pdf_data in contractor_pdf_data:
-                        file_obj = BytesIO(pdf_data["bytes"])
-                        file_obj.name = pdf_data["name"]
-                        file_obj.type = pdf_data["type"]
-                        contractor_files_reconstructed.append(file_obj)
-                    
-                    # CALL WITH PDFs (not just text)
-                    follow_en = call_gpt_estimate_with_pdfs(
-                        system_prompt=follow_system,
-                        insurance_files=insurance_files_reconstructed,
-                        contractor_files=contractor_files_reconstructed,
-                        extra_notes=follow_notes,
-                        max_output_tokens=700,
-                    )
-                    follow_es = translate_if_needed(
-                        follow_en, preferred_lang["code"]
-                    )
-
-                # Storage code - OUTSIDE spinner
-                if "estimate_followups" not in st.session_state:
-                    st.session_state["estimate_followups"] = []
+                prev_expl = st.session_state.get("estimate_explanation_en", "")
+                extra_prev = st.session_state.get("estimate_extra_notes", "")
                 
-                st.session_state["estimate_followups"].append({
-                    "question": follow_q,
-                    "answer": follow_en
-                })
+                # RETRIEVE stored PDFs
+                insurance_pdf_data = st.session_state.get("estimate_insurance_pdfs", [])
+                contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
 
-            # Display - OUTSIDE spinner, OUTSIDE else, but INSIDE the button block (3 indents)
-            st.markdown("##### Follow-up answer")
-            st.markdown(follow_en)
-            if follow_es:
-                st.markdown("##### Spanish Translation")
-                st.markdown(follow_es)
+                if not prev_expl and not insurance_pdf_data:
+                    st.warning("Please run an explanation first.")
+                else:
+                    with st.spinner("Generating follow-up explanation..."):
+                        follow_system = build_estimate_system_prompt() + """
+
+    You are answering a follow-up question about an estimate explanation you already provided.
+
+    CRITICAL INSTRUCTIONS:
+    - Do NOT regenerate or rewrite the entire explanation
+    - Do NOT repeat information already covered in the previous explanation
+    - ONLY provide additional detail, clarification, or specific information about what the user asked
+    - Keep your response focused and concise (2-4 paragraphs maximum)
+    - You have access to the original estimate PDFs again, so you can reference specific line items, numbers, or details if the user asks about them
+    - If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
+    - Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
+
+    Your goal is to ADD to the conversation, not restart it.
+    """.strip()
+
+                        # Build follow-up notes including previous explanation
+                        follow_notes = f"""
+    PREVIOUS EXPLANATION (for context):
+    {prev_expl}
+
+    USER'S FOLLOW-UP QUESTION:
+    {follow_q}
+
+    ORIGINAL NOTES FROM USER:
+    {extra_prev or 'None provided'}
+    """.strip()
+
+                        # RECONSTRUCT file-like objects from stored bytes
+                        from io import BytesIO
+                        
+                        insurance_files_reconstructed = []
+                        for pdf_data in insurance_pdf_data:
+                            file_obj = BytesIO(pdf_data["bytes"])
+                            file_obj.name = pdf_data["name"]
+                            file_obj.type = pdf_data["type"]
+                            insurance_files_reconstructed.append(file_obj)
+                        
+                        contractor_files_reconstructed = []
+                        for pdf_data in contractor_pdf_data:
+                            file_obj = BytesIO(pdf_data["bytes"])
+                            file_obj.name = pdf_data["name"]
+                            file_obj.type = pdf_data["type"]
+                            contractor_files_reconstructed.append(file_obj)
+                        
+                        # CALL WITH PDFs (not just text)
+                        follow_en = call_gpt_estimate_with_pdfs(
+                            system_prompt=follow_system,
+                            insurance_files=insurance_files_reconstructed,
+                            contractor_files=contractor_files_reconstructed,
+                            extra_notes=follow_notes,
+                            max_output_tokens=700,
+                        )
+                        follow_es = translate_if_needed(
+                            follow_en, preferred_lang["code"]
+                        )
+
+                    # Storage code - OUTSIDE spinner
+                    if "estimate_followups" not in st.session_state:
+                        st.session_state["estimate_followups"] = []
+                    
+                    st.session_state["estimate_followups"].append({
+                        "question": follow_q,
+                        "answer": follow_en
+                    })
+
+                # Display - OUTSIDE spinner, OUTSIDE else, but INSIDE the button block (3 indents)
+                st.markdown("##### Follow-up answer")
+                st.markdown(follow_en)
+                if follow_es:
+                    st.markdown("##### Spanish Translation")
+                    st.markdown(follow_es)
+
+        else:
+            st.markdown("---")
+            st.caption("Run **Explain my estimate** first to enable follow-up questions.")
 
     # Full disclaimers at bottom
     st.markdown("---")
@@ -1215,28 +1221,31 @@ EXTRA NOTES:
                     ">Email This</button>
                 </a>
             ''', unsafe_allow_html=True)
-    # Follow-up section (no expander needed!)
-    st.markdown("---")
-    st.markdown("#### Follow-up question about this plan")
-    
-    follow_q_reno = st.text_input(
-        "Follow-up question",
-        key="reno_followup_input",
-        placeholder="If you want more detail about the sequence or timeline, type your question here."
-    )
 
-    if st.button("Ask follow-up", key="reno_followup_btn"):
-        if not follow_q_reno:
-            st.warning("Please type a question.")
-        else:
-            prev_expl = st.session_state.get("renovation_explanation_en", "")
-            prev_inputs = st.session_state.get("renovation_inputs", {})
-            
-            if not prev_expl:
-                st.warning("Please generate a plan first.")
+
+    # Follow-up section (no expander needed!)
+    if st.session_state.get("renovation_explanation_en"):
+        st.markdown("---")
+        st.markdown("#### Follow-up question about this plan")
+
+        follow_q_reno = st.text_input(
+            "Follow-up question",
+            key="reno_followup_input",
+            placeholder="If you want more detail about the sequence or timeline, type your question here."
+        )
+
+        if st.button("Ask follow-up", key="reno_followup_btn"):
+            if not follow_q_reno:
+                st.warning("Please type a question.")
             else:
-                with st.spinner("Thinking about your follow-up question..."):
-                    follow_system = build_renovation_system_prompt() + """
+                prev_expl = st.session_state.get("renovation_explanation_en", "")
+                prev_inputs = st.session_state.get("renovation_inputs", {})
+
+                if not prev_expl:
+                    st.warning("Please generate a plan first.")
+                else:
+                    with st.spinner("Thinking about your follow-up question..."):
+                        follow_system = build_renovation_system_prompt() + """
 
 You are answering a follow-up question about a renovation plan you already provided.
 
@@ -1250,7 +1259,7 @@ CRITICAL INSTRUCTIONS:
 Your goal is to ADD to the conversation, not restart it.
 """.strip()
 
-                    follow_notes = f"""
+                        follow_notes = f"""
 PREVIOUS PLAN (for context):
 {prev_expl}
 
@@ -1266,24 +1275,29 @@ USER'S FOLLOW-UP QUESTION:
 {follow_q_reno}
 """.strip()
 
-                    follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
-                    follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+                        follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
+                        follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
-                # Storage code - OUTSIDE spinner
-                if "renovation_followups" not in st.session_state:
-                    st.session_state["renovation_followups"] = []
-                
-                st.session_state["renovation_followups"].append({
-                    "question": follow_q_reno,
-                    "answer": follow_en
-                })
+                    # Storage code - OUTSIDE spinner
+                    if "renovation_followups" not in st.session_state:
+                        st.session_state["renovation_followups"] = []
 
-            # Display - OUTSIDE spinner, OUTSIDE else, INSIDE button block
-            st.markdown("##### Follow-up answer")
-            st.markdown(follow_en)
-            if follow_es:
-                st.markdown("##### Spanish Translation")
-                st.markdown(follow_es)
+                    st.session_state["renovation_followups"].append({
+                        "question": follow_q_reno,
+                        "answer": follow_en
+                    })
+
+                    # Display (keep inside the "generated follow-up" path)
+                    st.markdown("##### Follow-up answer")
+                    st.markdown(follow_en)
+                    if follow_es:
+                        st.markdown("##### Spanish Translation")
+                        st.markdown(follow_es)
+
+    else:
+        st.markdown("---")
+        st.caption("Generate a plan first to enable follow-up questions.")
+
 
     # Full disclaimers at bottom
     st.markdown("---")
@@ -1594,28 +1608,29 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
                 </a>
             ''', unsafe_allow_html=True)
 
-    # Follow-up section
-    st.markdown("---")
-    st.markdown("#### Follow-up question about these design suggestions")
-        
-    follow_q_design = st.text_input(
-        "Follow-up question",
-        key="design_followup_input",
-        placeholder="If you want to explore specific color combinations or materials further, type your question here."
-    )
-    
-    if st.button("Ask follow-up", key="design_followup_btn"):
-        if not follow_q_design:
-            st.warning("Please type a question.")
-        else:
-            prev_expl = st.session_state.get("design_explanation_en", "")
-            prev_inputs = st.session_state.get("design_inputs", {})
-            
-            if not prev_expl:
-                st.warning("Please generate design suggestions first.")
+    # Follow-up (ONLY show after initial suggestions exist)
+    if st.session_state.get("design_explanation_en"):
+        st.markdown("---")
+        st.markdown("#### Follow-up question about these design suggestions")
+
+        follow_q_design = st.text_input(
+            "Follow-up question",
+            key="design_followup_input",
+            placeholder="If you want to explore specific color combinations or materials further, type your question here."
+        )
+
+        if st.button("Ask follow-up", key="design_followup_btn"):
+            if not follow_q_design:
+                st.warning("Please type a question.")
             else:
-                with st.spinner("Thinking about your follow-up question..."):
-                    follow_system = build_design_system_prompt() + """
+                prev_expl = st.session_state.get("design_explanation_en", "")
+                prev_inputs = st.session_state.get("design_inputs", {})
+
+                if not prev_expl:
+                    st.warning("Please generate design suggestions first.")
+                else:
+                    with st.spinner("Thinking about your follow-up question..."):
+                        follow_system = build_design_system_prompt() + """
 
 You are answering a follow-up question about design suggestions you already provided.
 
@@ -1629,7 +1644,7 @@ CRITICAL INSTRUCTIONS:
 Your goal is to ADD to the conversation, not restart it.
 """.strip()
 
-                    follow_notes = f"""
+                        follow_notes = f"""
 PREVIOUS SUGGESTIONS (for context):
 {prev_expl}
 
@@ -1648,24 +1663,28 @@ USER'S FOLLOW-UP QUESTION:
 {follow_q_design}
 """.strip()
 
-                    follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
-                    follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+                        follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
+                        follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
-                # Storage code - OUTSIDE spinner
-                if "design_followups" not in st.session_state:
-                    st.session_state["design_followups"] = []
-                
-                st.session_state["design_followups"].append({
-                    "question": follow_q_design,
-                    "answer": follow_en
-                })
+                    # Storage code - OUTSIDE spinner
+                    if "design_followups" not in st.session_state:
+                        st.session_state["design_followups"] = []
 
-            # Display - OUTSIDE spinner, OUTSIDE else, INSIDE button block
-            st.markdown("##### Follow-up answer")
-            st.markdown(follow_en)
-            if follow_es:
-                st.markdown("##### Spanish Translation")
-                st.markdown(follow_es)
+                    st.session_state["design_followups"].append({
+                        "question": follow_q_design,
+                        "answer": follow_en
+                    })
+
+                    # Display (keep inside the "generated follow-up" path)
+                    st.markdown("##### Follow-up answer")
+                    st.markdown(follow_en)
+                    if follow_es:
+                        st.markdown("##### Spanish Translation")
+                        st.markdown(follow_es)
+
+    else:
+        st.markdown("---")
+        st.caption("Generate design suggestions first to enable follow-up questions.")
 
     # Full disclaimers at bottom
     st.markdown("---")
