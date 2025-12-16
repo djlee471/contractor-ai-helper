@@ -32,309 +32,179 @@ st.set_page_config(
     layout="wide",
 )
 
-# Hide Streamlit's automatic "Press Enter to..." hints under text inputs
-st.markdown("""
-<style>
-/* Hide the helper text that appears below text_input widgets */
-[data-testid="stTextInput"] div[data-testid="stCaptionContainer"] {
-    display: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# Hide the sidebar collapse/expand button (and its stray text)
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Reduce size of white space at top of page + Force white background + Set width
 
 st.markdown("""
 <style>
-/* Remove Streamlit's default top banner spacing */
-[data-testid="stAppViewContainer"] {
-    padding-top: 0rem !important;
-    margin-top: 0rem !important;
-}
+/* Load fonts FIRST - must be at top */
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap');
 
-section.main > div {
-    padding-top: 0rem !important;
-    margin-top: 0rem !important;
-}
-
-/* Force pure white backgrounds */
-html, body, [data-testid="stAppViewContainer"], .block-container {
-    background-color: #FFFFFF !important;
-}
-
-/* Control content container - all properties in one place */
+/* Control top spacing and page width */
 .block-container {
-    padding-top: 3rem !important;  /* Desktop - comfortable breathing room */    
-    max-width: 1100px;
-    padding-left: 2.5rem;
-    padding-right: 2.5rem;
+    padding-top: 4rem !important;
+    max-width: 1100px !important;
+    padding-left: 2.5rem !important;
+    padding-right: 2.5rem !important;
 }
-            
-/* Tighter spacing ONLY on mobile */
+
+/* Mobile adjustments */
 @media (max-width: 768px) {
     .block-container {
-        padding-top: 2rem !important;  /* Mobile - slightly tighter */        
+        padding-top: 0.75rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
 }
 
-            
-</style>
-""", unsafe_allow_html=True)
-
-
-# ======================
-# Hide Streamlit Top-Right Menu + Footer + Header
-# ======================
-st.markdown("""
-<style>
-/* Hide the header toolbar area (cloud only) - multiple selectors */
-header[data-testid="stHeader"],
-section[data-testid="stHeader"],
-div[data-testid="stHeader"],
-.stApp > header {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
+/* Add space between app title and tabs */
+.stTabs {
+    margin-top: 2rem !important;
 }
-
-/* Hide the top-right hamburger menu */
-#MainMenu {
-    visibility: hidden !important;
-    display: none !important;
-}
-
-/* Hide the "Made with Streamlit" footer */
-footer {
-    visibility: hidden !important;
-    display: none !important;
-}
-
-/* Force app to start at top */
-.stApp {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# ==================
-# FONTS and colors
-# ==================
-
-st.markdown("""
-<style>
-/* Load Inter (UI/body) + Sora (app title) */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Sora:wght@500;600;700&display=swap');
 
 /* Apply Manrope to most UI text */
 html, body, div, span, input, textarea, button, select, label, p, li, ul, ol, [class], * {
-    font-family: "Manrope", sans-serif !important;
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
-/* Optional: slightly improve default text rendering */
+/* Improve default text rendering */
 html, body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
-</style>
-""", unsafe_allow_html=True)
 
-
-st.markdown("""
-<style>
-/* Keep headings neutral so the UI feels more “studio” than “dashboard” */
+/* Keep headings neutral */
 h2, h3 {
     color: #0F172A !important;
 }
 
-/* Keep your info box styling (optional: we can purple-ize later) */
+/* Info box styling */
 [data-testid="stAlert"] {
     background-color: #E0F2FE !important;
     border-color: #60A5FA !important;
     color: #0F172A !important;
 }
-</style>
-""", unsafe_allow_html=True)
 
-
-
-#=================
-## TITLE FONT
-#=================
-
-st.markdown("""
-<style>
+/* Custom app title */
 .custom-app-title {
-    font-family: 'Sora', sans-serif !important;
+    font-family: 'Cabinet Grotesk', sans-serif !important;
     font-size: 2rem !important;
-    font-weight: 385 !important;
+    font-weight: 500 !important;
     margin: 0 0 0.25rem 0;
     padding: 0;
     line-height: 1.1;
     letter-spacing: -0.02em;
-    color: #0F172A;
+    color: #420741ff;
 }
-</style>
-""", unsafe_allow_html=True)
 
-#===========================
-## WHITESPACE formatting. ADJUST ONE VALUE HERE TO CHANGE WHITE SPACE BETWEEN TITLE/DESCRIPTION AND TABS
-#=========================
-st.markdown("""
-<style>
-/* Subtitle under the main title (Row 1 in main()) */
+/* Subtitle under the main title */
 .header-subtitle {
     font-size: 0.95rem;
-    color: #475569;
+    color: #a75ea7ff;
     margin-top: 0.25rem;
-    margin-bottom: 3rem;  /* adjust this to control header→tabs spacing */
+    margin-bottom: 0.35rem; 
 }
 
-/* Language label above the selectbox (Row 2 right column) */
+/* Language label + select group */
+.lang-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
 .lang-label {
-    font-size: 13px;
-    color: #666;
-    margin: 0 0 0.35rem 0;   /* clean, non-brittle spacing */
+    font-size: 12px;
+    color: #64748B;
+    line-height: 1;
 }
-</style>
-""", unsafe_allow_html=True)
 
+/* Constrain width of the language selectbox */
+.st-key-preferred_lang_select {
+    max-width: 160px;
+}
 
-
-#=========================================
-# Formating headings - getting rid of bold
-#=========================================
-
-st.markdown("""
-<style>
-/* Section headings: larger, not bold */
+/* Reduce internal padding / visual height */
+.st-key-preferred_lang_select [data-baseweb="select"] > div {
+    min-height: 38px !important;
+    font-size: 0.90rem !important;
+}
+ 
+/* Welcome heading - slightly larger */
 h2 {
-    font-weight: 400 !important;     /* regular */
-    font-size: 1.6rem !important;    /* larger for separation */
-    margin-top: 2.75rem !important;
-    margin-bottom: 0.75rem !important;
-    letter-spacing: -0.015em;
-    color: #0F172A;
-}
-
-/* Subsection headings */
-h3 {
-    font-weight: 400 !important;
-    font-size: 1.2rem !important;
-    margin-top: 1.75rem !important;
-    margin-bottom: 0.5rem !important;
-    letter-spacing: -0.01em;
-    color: #0F172A;
-}
-</style>
-""", unsafe_allow_html=True)
-
-#==========================
-## TAB DESCRIPTION WHITESPACE AND FONT SIZE
-#===========================
-st.markdown("""
-<style>
-/* Custom description styling - larger since no title */
-.tab-description {
-    margin-top: 1.5rem !important;  /* Force space above */
-    margin-bottom: 2rem !important;
-    font-size: 1rem !important;
-    color: #475569 !important;
-    line-height: 1.7 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-#======================
-# NUCLEAR OPTION FOR TOP WHITE SPACE AND OTHER ATTEMPTS
-#============================
-
-# After your existing whitespace CSS, add just this:
-st.markdown("""
-<style>
-/* Fine-tune: remove any gap between app container and first element */
-div[data-testid="stVerticalBlock"] {
-    gap: 0rem !important;
-}
-
-div[data-testid="stVerticalBlock"] > div:first-child {
-    padding-top: 0 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-#======================
-# ADD BACK SELECTIVE SPACING
-#============================
-
-st.markdown("""
-<style>
-/* Add breathing room between major UI elements */
-
-/* Space between form elements */
-[data-testid="stTextInput"],
-[data-testid="stTextArea"],
-[data-testid="stSelectbox"],
-[data-testid="stMultiSelect"] {
-    margin-bottom: 1.25rem !important;
-}
-
-/* Space between buttons and surrounding content */
-[data-testid="stButton"] {
+    font-weight: 500 !important;
+    font-size: 1.25rem !important;
     margin-top: 1rem !important;
-    margin-bottom: 1rem !important;
+    margin-bottom: 0.75rem !important;
+    color: #0F172A !important;
 }
 
-/* Space around info/warning boxes */
-[data-testid="stAlert"] {
+/* Section labels - same size as body */
+h3 {
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    margin-top: 0.75rem !important;
+    margin-bottom: 0.5rem !important;
+    color: #0F172A !important;
+}
+
+/* ===== BACKGROUND COLORS ===== */
+/* Make app background pure white */
+.stApp {
+    background-color: #FFFFFF !important;
+}
+
+/* Make disclaimer box light-medium gray */
+.disclaimer-box {
+    background-color: #F1F5F9 !important;
+    border-left: 3px solid #94A3B8 !important;
+    padding: 1rem 1.25rem !important;
+    margin: 1.5rem 0 2rem !important;
+    border-radius: 0.375rem !important;
+}
+
+/* ===== TAB CONTENT SPACING ===== */
+/* Space above and below tab description text */
+.tab-description {
+    margin-top: 1.5rem !important;
+    margin-bottom: 2rem !important;
+}
+
+/* Add breathing room between form elements inside tabs */
+.stTabs [data-testid="stTextInput"],
+.stTabs [data-testid="stTextArea"],
+/* Add breathing room between form elements inside tabs */
+.stTabs [data-testid="stTextInput"],
+.stTabs [data-testid="stTextArea"],
+.stTabs [data-testid="stSelectbox"],
+.stTabs [data-testid="stMultiSelect"],
+.stTabs [data-testid="stFileUploader"] {
+    margin-bottom: 1.5rem !important;
+}
+
+/* Space around buttons in tabs */
+.stTabs [data-testid="stButton"] {
     margin-top: 1.5rem !important;
     margin-bottom: 1.5rem !important;
 }
 
-/* Extra space around horizontal rules */
-hr {
-    margin-top: 2rem !important;
+/* Extra space around horizontal rules in tabs */
+.stTabs hr {
+    margin-top: 2.5rem !important;
     margin-bottom: 2rem !important;
 }
 
-/* Space around file uploader specifically */
-[data-testid="stFileUploader"] {
-    margin-top: 0.5rem !important;
-    margin-bottom: 1.5rem !important;
+/* Space around info/warning boxes in tabs */
+.stTabs [data-testid="stAlert"] {
+    margin-top: 1.5rem !important;
+    margin-bottom: 2rem !important;
 }
 
-/* Space only for markdown INSIDE tabs, not at top */
-.stTabs [data-testid="stMarkdownContainer"] {
-    margin-bottom: 0.75rem !important;
+/* Space around markdown paragraphs in tabs */
+.stTabs [data-testid="stMarkdownContainer"] p {
+    margin-bottom: 1rem !important;
 }
-</style>
-""", unsafe_allow_html=True)
 
-#=========================
-# HOVER EFFECT
-#========================
-
-st.markdown("""
-<style>
-/* Subtle hover effect on form inputs */
+/* Form input hover effects */
 input:hover, 
 textarea:hover, 
 select:hover {
@@ -347,12 +217,8 @@ select:hover {
     background-color: #F8FAFC !important;
     transition: background-color 0.2s ease;
 }
-</style>
-""", unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-/* ===== Unified button styling (Streamlit buttons + download buttons) ===== */
+/* Button styling */
 [data-testid="stButton"] button,
 [data-testid="stDownloadButton"] button {
     display: flex !important;
@@ -367,7 +233,7 @@ st.markdown("""
     padding-top: 0.55rem !important;
     padding-bottom: 0.55rem !important;
 
-    min-height: 44px !important; /* consistent height */
+    min-height: 44px !important;
 
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
@@ -376,28 +242,19 @@ st.markdown("""
     transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-/* Hover styling */
+/* Button hover styling */
 [data-testid="stButton"] button:hover,
 [data-testid="stDownloadButton"] button:hover {
     background-color: #E2E8F0 !important;
     border-color: #CBD5E1 !important;
 }
 
-/* Center/normalize label rendering (both button types) */
-[data-testid="stButton"] button > div,
-[data-testid="stButton"] button > span,
-[data-testid="stDownloadButton"] button > div,
-[data-testid="stDownloadButton"] button > span {
-    line-height: 1.15 !important;
-    transform: translateY(3px) !important;
-}
-
-/* ===== Keep the two action buttons level in the same row ===== */
+/* Keep action buttons level in same row */
 [data-testid="stHorizontalBlock"] {
     align-items: flex-end !important;
 }
 
-/* Remove wrapper margins that cause drift between download + regular buttons */
+/* Remove wrapper margins */
 [data-testid="stButton"],
 [data-testid="stDownloadButton"] {
     margin: 0 !important;
@@ -408,7 +265,37 @@ st.markdown("""
     margin: 0 !important;
     padding: 0 !important;
 }
-</style>
+            
+/* ===== TAB NAVIGATION STYLING ===== */
+/* Active tab - purple color */
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+    color: #420741 !important;
+    border-bottom-color: #420741 !important;
+}
+
+/* Bold the active tab text */
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] p {
+    font-weight: 800 !important;
+}
+
+/* Tab highlight bar (underline) */
+.stTabs [data-baseweb="tab-highlight"] {
+    background-color: #420741 !important;
+}
+
+/* Hover state for tabs */
+.stTabs [data-baseweb="tab-list"] button:hover {
+    color: #420741 !important;
+}
+
+/* Inactive tabs - gray and normal weight */
+.stTabs [data-baseweb="tab-list"] button[aria-selected="false"] {
+    color: #475569 !important;
+}
+
+.stTabs [data-baseweb="tab-list"] button[aria-selected="false"] p {
+    font-weight: 400 !important;
+}
 """, unsafe_allow_html=True)
 
 
@@ -458,11 +345,13 @@ def get_preferred_language() -> Dict:
     default_index = next(
         i for i, lang in enumerate(SUPPORTED_LANGUAGES) if lang["is_default"]
     )
+
     preferred_label = st.selectbox(
-        "",
+        "Preferred language",
         language_labels,
         index=default_index,
         key="preferred_lang_select",
+        label_visibility="collapsed",
     )
 
     return next(lang for lang in SUPPORTED_LANGUAGES if lang["label"] == preferred_label)
@@ -865,20 +754,22 @@ def estimate_explainer_tab(preferred_lang: Dict):
     """, unsafe_allow_html=True)
 
 
-    st.markdown("### Upload your insurance estimate")
+    st.markdown("### Upload your insurance estimate — I'll help you understand it (PDF preferred)")
     insurance_files = st.file_uploader(
-        "Insurance estimate (PDF preferred)",
+        label="Insurance estimate",  # Streamlit requires a label, but we can hide it with CSS
         type=["pdf", "png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="ins_files",
+        label_visibility="collapsed"  # This hides the label!
     )
 
-    st.markdown("### Optional: upload your contractor's estimate")
+    st.markdown("### Optional: Upload your contractor's estimate (PDF preferred)")
     contractor_files = st.file_uploader(
-        "Contractor estimate (PDF preferred)",
+        label="Contractor estimate",
         type=["pdf", "png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="con_files",
+        label_visibility="collapsed"  # This hides the label!
     )
 
     extra_notes = st.text_area(
@@ -1141,7 +1032,7 @@ def renovation_plan_tab(preferred_lang: Dict):
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("### Areas involved")
+    st.markdown("### What areas involved in your project?")
     rooms = st.multiselect(
         "Select all areas that apply",
         [
@@ -1164,7 +1055,7 @@ def renovation_plan_tab(preferred_lang: Dict):
     if "Other" in rooms:
         other_rooms = st.text_input("Describe other areas:")
 
-    st.markdown("### Kinds of work")
+    st.markdown("### What kind of work is involved? Don't worry if you're not sure about everything.")
 
     work_types = st.multiselect(
     "Select all kinds of work that apply",
@@ -1785,7 +1676,7 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
-    # Row 1: Title (left) + language (right)
+    # Row 1: Header
     header_left, header_right = st.columns([4, 1], vertical_alignment="top")
 
     with header_left:
@@ -1797,31 +1688,26 @@ def main():
         """, unsafe_allow_html=True)
 
     with header_right:
-        st.markdown("<div class='lang-label'>Preferred language for responses</div>", unsafe_allow_html=True)
+        st.markdown("<div class='lang-label'>Preferred language</div>", unsafe_allow_html=True)
         preferred_lang = get_preferred_language()
 
-    # Row 2: Tabs (full width)
-    tabs = st.tabs(
-        [
-            "HOME",
-            "ESTIMATE EXPLAINER",
-            "RENOVATION PLAN",
-            "DESIGN HELPER",
-        ]
-    )
+    # HARD break between header and tabs (this is important)
+    st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
+
+    # Row 2: Tabs ONLY
+    tabs = st.tabs([
+        "HOME",
+        "ESTIMATE EXPLAINER",
+        "RENOVATION PLAN",
+        "DESIGN HELPER",
+    ])
 
 # ---------- HOME TAB ----------
     with tabs[0]:
         # Strong HOME-PAGE Disclaimer (only in HOME tab)
         if preferred_lang["code"] == "es":
             st.markdown("""
-            <div style="
-                background-color: #F8FAFC;
-                border-left: 3px solid #94A3B8;
-                padding: 1rem 1.25rem;
-                margin: 1.5rem 0 2rem 0;
-                border-radius: 0.375rem;
-            ">
+            <div class="disclaimer-box">
             Esta herramienta en versión beta solo proporciona información educativa general 
             y puede estar incompleta o contener errores. No ofrece asesoría profesional en 
             seguros, asuntos legales, construcción, seguridad ni diseño. Todas las decisiones 
@@ -1832,13 +1718,7 @@ def main():
 
         else:
             st.markdown("""
-            <div style="
-                background-color: #F8FAFC;
-                border-left: 3px solid #94A3B8;
-                padding: 1rem 1.25rem;
-                margin: 1.5rem 0 2rem 0;
-                border-radius: 0.375rem;
-            ">
+            <div class="disclaimer-box">
             This beta tool provides general educational information only and may be incomplete or 
             incorrect. It does not provide professional insurance, legal, construction, safety, or 
             design advice. All final decisions must be based on the guidance of your licensed contractor, 
@@ -1846,7 +1726,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        st.subheader("Welcome")
+        st.markdown("## Welcome")
         st.write(
             "This app is designed to help you understand your home repair project at every stage. "
             "Use the tabs above to explore your insurance estimate, see how repairs typically unfold, "
@@ -1877,11 +1757,11 @@ def main():
             st.markdown("""
             <div style='text-align: center;'>
                 <img src='data:image/png;base64,{}' width='180' style='margin-bottom: -2rem;'>
-                <div style='font-size: 0.85rem; color: #64748B; margin-top: -0.5rem;'>
-                    Built by Nareum AI Studio
+                <div style='font-size: 0.85rem; color: #64748B; margin-top: 1.5em;'>
+                    Built by ElseFrame AI Studio
                 </div>
             </div>
-            """.format(base64.b64encode(open("logo4_h.png", "rb").read()).decode()), unsafe_allow_html=True)
+            """.format(base64.b64encode(open("elseframe2.png", "rb").read()).decode()), unsafe_allow_html=True)
 
     # ---------- OTHER TABS ----------
     with tabs[1]:
