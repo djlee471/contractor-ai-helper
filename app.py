@@ -317,21 +317,13 @@ footer {
     display: none !important;
 }
 
-/* Hide "Manage app" button - more specific selectors */
-.stActionButton {
+/* Hide "Manage app" button - exact selector */
+button[data-testid="manage-app-button"] {
     display: none !important;
 }
 
-button[kind="header"] {
-    display: none !important;
-}
-
-[data-testid="stToolbar"] {
-    display: none !important;
-}
-
-/* Streamlit's floating action button */
-.st-emotion-cache-1gulkj5 {
+/* Also hide the terminal button container if it exists */
+._terminalButton_rix23_138 {
     display: none !important;
 }
 """, unsafe_allow_html=True)
