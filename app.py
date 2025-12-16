@@ -303,27 +303,8 @@ header[data-testid="stHeader"] {
     display: none !important;
 }
 
-/* Hide "Manage app" button at bottom right */
-#MainMenu {
-    display: none !important;
-}
-
+/* Hide footer (but won't hide the Streamlit badge on free tier) */
 footer {
-    display: none !important;
-}
-
-/* Also hide the deploy button if it appears */
-.stDeployButton {
-    display: none !important;
-}
-
-/* Hide "Manage app" button - exact selector */
-button[data-testid="manage-app-button"] {
-    display: none !important;
-}
-
-/* Also hide the terminal button container if it exists */
-._terminalButton_rix23_138 {
     display: none !important;
 }
 """, unsafe_allow_html=True)
