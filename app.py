@@ -316,6 +316,24 @@ footer {
 .stDeployButton {
     display: none !important;
 }
+
+/* Hide "Manage app" button - more specific selectors */
+.stActionButton {
+    display: none !important;
+}
+
+button[kind="header"] {
+    display: none !important;
+}
+
+[data-testid="stToolbar"] {
+    display: none !important;
+}
+
+/* Streamlit's floating action button */
+.st-emotion-cache-1gulkj5 {
+    display: none !important;
+}
 """, unsafe_allow_html=True)
 
 
