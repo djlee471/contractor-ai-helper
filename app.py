@@ -296,6 +296,26 @@ select:hover {
 .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] p {
     font-weight: 400 !important;
 }
+            
+/* ===== HIDE STREAMLIT CHROME ===== */
+/* Hide top header (3 dots menu) */
+header[data-testid="stHeader"] {
+    display: none !important;
+}
+
+/* Hide "Manage app" button at bottom right */
+#MainMenu {
+    display: none !important;
+}
+
+footer {
+    display: none !important;
+}
+
+/* Also hide the deploy button if it appears */
+.stDeployButton {
+    display: none !important;
+}
 """, unsafe_allow_html=True)
 
 
