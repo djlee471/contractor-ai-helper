@@ -172,9 +172,6 @@ h3 {
 /* Add breathing room between form elements inside tabs */
 .stTabs [data-testid="stTextInput"],
 .stTabs [data-testid="stTextArea"],
-/* Add breathing room between form elements inside tabs */
-.stTabs [data-testid="stTextInput"],
-.stTabs [data-testid="stTextArea"],
 .stTabs [data-testid="stSelectbox"],
 .stTabs [data-testid="stMultiSelect"],
 .stTabs [data-testid="stFileUploader"] {
@@ -200,10 +197,12 @@ h3 {
 }
 
 /* Space around markdown paragraphs in tabs */
+/* COMMENTED OUT. THIS IS CAUSING VERTICAL ALIGNMENT ISSUE OF FONT IN BUTTONS
 .stTabs [data-testid="stMarkdownContainer"] p {
     margin-bottom: 1rem !important;
 }
-
+*/
+            
 /* Form input hover effects */
 input:hover, 
 textarea:hover, 
@@ -880,25 +879,28 @@ def estimate_explainer_tab(preferred_lang: Dict):
         st.markdown("---")
         st.markdown("#### Follow-up question about this explanation")
 
-        # --- KEEP your existing follow-up UI + logic here ---
         follow_q = st.text_input(
             "Follow-up question",
+            key="estimate_followup_input",
             placeholder="If you want more detail about something above, type your question here."
         )
-    
-        if st.button("Ask follow-up"):
-            if not follow_q:
+
+        if st.button("Ask follow-up", key="estimate_followup_btn"):
+            if not follow_q.strip():
                 st.warning("Please type a question.")
             else:
                 prev_expl = st.session_state.get("estimate_explanation_en", "")
                 extra_prev = st.session_state.get("estimate_extra_notes", "")
-                
-                # RETRIEVE stored PDFs
+
+                # Retrieve stored PDFs (bytes) so follow-ups are reproducible
                 insurance_pdf_data = st.session_state.get("estimate_insurance_pdfs", [])
                 contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
 
-                if not prev_expl and not insurance_pdf_data:
-                    st.warning("Please run an explanation first.")
+                # Defensive checks (should usually pass if the user already ran Explain)
+                if not prev_expl:
+                    st.warning("Please run **Explain my estimate** first.")
+                elif not insurance_pdf_data:
+                    st.warning("Your uploaded estimate PDFs aren't available anymore. Please re-upload and run **Explain my estimate** again.")
                 else:
                     with st.spinner("Generating follow-up explanation..."):
                         follow_system = build_estimate_system_prompt() + """
@@ -917,7 +919,6 @@ def estimate_explainer_tab(preferred_lang: Dict):
     Your goal is to ADD to the conversation, not restart it.
     """.strip()
 
-                        # Build follow-up notes including previous explanation
                         follow_notes = f"""
     PREVIOUS EXPLANATION (for context):
     {prev_expl}
@@ -929,24 +930,23 @@ def estimate_explainer_tab(preferred_lang: Dict):
     {extra_prev or 'None provided'}
     """.strip()
 
-                        # RECONSTRUCT file-like objects from stored bytes
+                        # Reconstruct file-like objects from stored bytes
                         from io import BytesIO
-                        
+
                         insurance_files_reconstructed = []
                         for pdf_data in insurance_pdf_data:
                             file_obj = BytesIO(pdf_data["bytes"])
                             file_obj.name = pdf_data["name"]
                             file_obj.type = pdf_data["type"]
                             insurance_files_reconstructed.append(file_obj)
-                        
+
                         contractor_files_reconstructed = []
                         for pdf_data in contractor_pdf_data:
                             file_obj = BytesIO(pdf_data["bytes"])
                             file_obj.name = pdf_data["name"]
                             file_obj.type = pdf_data["type"]
                             contractor_files_reconstructed.append(file_obj)
-                        
-                        # CALL WITH PDFs (not just text)
+
                         follow_en = call_gpt_estimate_with_pdfs(
                             system_prompt=follow_system,
                             insurance_files=insurance_files_reconstructed,
@@ -954,29 +954,29 @@ def estimate_explainer_tab(preferred_lang: Dict):
                             extra_notes=follow_notes,
                             max_output_tokens=700,
                         )
-                        follow_es = translate_if_needed(
-                            follow_en, preferred_lang["code"]
-                        )
 
-                    # Storage code - OUTSIDE spinner
-                    if "estimate_followups" not in st.session_state:
-                        st.session_state["estimate_followups"] = []
-                    
+                        # Normalize dashes for consistent rendering/export
+                        follow_en = follow_en.replace("–", "-").replace("—", "-")
+
+                        follow_es = translate_if_needed(follow_en, preferred_lang["code"])
+
+                    # Store follow-up
+                    st.session_state.setdefault("estimate_followups", [])
                     st.session_state["estimate_followups"].append({
                         "question": follow_q,
                         "answer": follow_en
                     })
 
-                # Display - OUTSIDE spinner, OUTSIDE else, but INSIDE the button block (3 indents)
-                st.markdown("##### Follow-up answer")
-                st.markdown(follow_en)
-                if follow_es:
-                    st.markdown("##### Spanish Translation")
-                    st.markdown(follow_es)
+                    # Display follow-up
+                    st.markdown("##### Follow-up answer")
+                    st.markdown(follow_en)
+                    if follow_es:
+                        st.markdown("##### Spanish Translation")
+                        st.markdown(follow_es)
 
-        else:
-            st.markdown("---")
-            st.caption("Run **Explain my estimate** first to enable follow-up questions.")
+    else:
+        st.markdown("---")
+        st.caption("Run **Explain my estimate** first to enable follow-up questions.")
 
     # Full disclaimers at bottom
     st.markdown("---")
@@ -1293,12 +1293,12 @@ USER'S FOLLOW-UP QUESTION:
 
     # English block first
     st.markdown(BASE_DISCLAIMER_EN)
-    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+    st.markdown(AGENT_B_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
 
     # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
-        st.markdown(AGENT_A_DISCLAIMER_ES)
+        st.markdown(AGENT_B_DISCLAIMER_ES)
 
 
 
@@ -1672,12 +1672,12 @@ USER'S FOLLOW-UP QUESTION:
 
     # English block first
     st.markdown(BASE_DISCLAIMER_EN)
-    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+    st.markdown(AGENT_C_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
 
     # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
-        st.markdown(AGENT_A_DISCLAIMER_ES)
+        st.markdown(AGENT_C_DISCLAIMER_ES)
 
 
 
