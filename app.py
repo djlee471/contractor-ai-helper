@@ -828,11 +828,40 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 for f in (contractor_files or [])
             ]
 
-            # ✅ OPTIONAL BUT RECOMMENDED: unified list for future JSON pipeline
+            # ✅ Unified list for JSON pipeline
             st.session_state["estimate_docs"] = (
                 [{"role": "insurance", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (insurance_files or [])]
                 + [{"role": "contractor", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (contractor_files or [])]
             )
+
+            # PDF extraction happening here
+            from estimate_extract import extract_pdf_pages_text, join_page_packets
+
+            docs = st.session_state.get("estimate_docs", [])
+            for d in docs:
+                packets = extract_pdf_pages_text(d["bytes"])
+                d["page_packets"] = packets
+                d["extracted_text"] = join_page_packets(packets)
+
+            st.session_state["estimate_docs"] = docs
+
+            from estimate_parser import parse_estimate_doc
+
+            parsed_docs = []
+            for d in st.session_state["estimate_docs"]:
+                parsed = parse_estimate_doc(
+                    client=client,
+                    doc_role=d["role"],
+                    filename=d["name"],
+                    extracted_text=d.get("extracted_text", "") or "",
+                    model="gpt-4.1-mini",
+                )
+                parsed_docs.append(parsed)
+
+            st.session_state["estimate_json_docs"] = parsed_docs
+
+            # just debugging check
+            st.success(f"Parsed {len(parsed_docs)} document(s) into JSON.")
 
             system_prompt = build_estimate_system_prompt()
             english_answer = call_gpt_estimate_with_pdfs(
