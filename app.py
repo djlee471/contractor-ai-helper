@@ -644,7 +644,7 @@ You are an assistant that explains home insurance and construction estimates
 for homeowners in simple, friendly English.
 
 DOCUMENT READING:
-- You will receive raw text from an insurance estimate and (optionally) a contractor estimate.
+- You will receive raw text from an insurance estimate, a contractor estimate, or both.
 - The text may be messy or lack table formatting. You MUST still try to read it and extract useful information.
 - Look for, and when helpful refer to:
   - Line item descriptions
@@ -763,24 +763,35 @@ def estimate_explainer_tab(preferred_lang: Dict):
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("### What estimates do you have?")
+    colA, colB = st.columns(2)
+    with colA:
+        has_insurance = st.checkbox("Insurance estimate", value=False, key="has_insurance")
+    with colB:
+        has_contractor = st.checkbox("Contractor estimate", value=False, key="has_contractor")
 
-    st.markdown("### Upload your insurance estimate — I'll help you understand it (PDF preferred)")
-    insurance_files = st.file_uploader(
-        label="Insurance estimate",  # Streamlit requires a label, but we can hide it with CSS
-        type=["pdf", "png", "jpg", "jpeg"],
-        accept_multiple_files=True,
-        key="ins_files",
-        label_visibility="collapsed"  # This hides the label!
-    )
+    insurance_files = []
+    contractor_files = []
 
-    st.markdown("### Optional: Upload your contractor's estimate (PDF preferred)")
-    contractor_files = st.file_uploader(
-        label="Contractor estimate",
-        type=["pdf", "png", "jpg", "jpeg"],
-        accept_multiple_files=True,
-        key="con_files",
-        label_visibility="collapsed"  # This hides the label!
-    )
+    if has_insurance:
+        st.markdown("### Upload your insurance estimate (PDF)")
+        insurance_files = st.file_uploader(
+            label="Insurance estimate",
+            type=["pdf"],
+            accept_multiple_files=True,
+            key="ins_files",
+            label_visibility="collapsed"
+        )
+
+    if has_contractor:
+        st.markdown("### Upload your contractor estimate (PDF)")
+        contractor_files = st.file_uploader(
+            label="Contractor estimate",
+            type=["pdf"],
+            accept_multiple_files=True,
+            key="con_files",
+            label_visibility="collapsed"
+        )
 
     extra_notes = st.text_area(
         "Anything your adjuster or contractor already explained that we should treat as correct? (Optional)",
@@ -788,29 +799,45 @@ def estimate_explainer_tab(preferred_lang: Dict):
     )
 
     if st.button("Explain my estimate"):
-        if not insurance_files:
-            st.warning("Please upload at least your insurance estimate (PDF).")
+        # ✅ NEW validation (replaces "insurance required")
+        if not has_insurance and not has_contractor:
+            st.warning("Please select at least one estimate type.")
+            return
+
+        if has_insurance and not insurance_files:
+            st.warning("Please upload your insurance estimate (PDF).")
+            return
+
+        if has_contractor and not contractor_files:
+            st.warning("Please upload your contractor estimate (PDF).")
+            return
+
+        if not insurance_files and not contractor_files:
+            st.warning("Please upload at least one estimate (PDF).")
             return
 
         with st.spinner("Reading your estimate PDFs and preparing an explanation..."):
-            # STORE PDFs as bytes for follow-ups
+            # ✅ KEEP: store PDFs as bytes for follow-ups
             st.session_state["estimate_insurance_pdfs"] = [
-                {"name": f.name, "type": f.type, "bytes": f.getvalue()} 
-                for f in insurance_files
+                {"name": f.name, "type": f.type, "bytes": f.getvalue()}
+                for f in (insurance_files or [])
             ]
-            
-            if contractor_files:
-                st.session_state["estimate_contractor_pdfs"] = [
-                    {"name": f.name, "type": f.type, "bytes": f.getvalue()} 
-                    for f in contractor_files
-                ]
-            else:
-                st.session_state["estimate_contractor_pdfs"] = []
-            
+
+            st.session_state["estimate_contractor_pdfs"] = [
+                {"name": f.name, "type": f.type, "bytes": f.getvalue()}
+                for f in (contractor_files or [])
+            ]
+
+            # ✅ OPTIONAL BUT RECOMMENDED: unified list for future JSON pipeline
+            st.session_state["estimate_docs"] = (
+                [{"role": "insurance", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (insurance_files or [])]
+                + [{"role": "contractor", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (contractor_files or [])]
+            )
+
             system_prompt = build_estimate_system_prompt()
             english_answer = call_gpt_estimate_with_pdfs(
                 system_prompt=system_prompt,
-                insurance_files=insurance_files,
+                insurance_files=insurance_files or [],
                 contractor_files=contractor_files or [],
                 extra_notes=extra_notes or "",
                 max_output_tokens=1100,
@@ -897,14 +924,18 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
 
                 # Defensive checks (should usually pass if the user already ran Explain)
-                if not prev_expl:
+                docs = st.session_state.get("estimate_docs", [])
+
+                if not prev_expl.strip():
                     st.warning("Please run **Explain my estimate** first.")
-                elif not insurance_pdf_data:
-                    st.warning("Your uploaded estimate PDFs aren't available anymore. Please re-upload and run **Explain my estimate** again.")
+                elif not docs:
+                    st.warning(
+                        "Your uploaded estimate PDFs aren't available anymore. "
+                        "Please re-upload and run **Explain my estimate** again."
+                    )
                 else:
                     with st.spinner("Generating follow-up explanation..."):
                         follow_system = build_estimate_system_prompt() + """
-
     You are answering a follow-up question about an estimate explanation you already provided.
 
     CRITICAL INSTRUCTIONS:
