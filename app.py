@@ -638,8 +638,9 @@ def create_explanation_pdf(content, title, followups=None):
 # Mini-Agent A: Estimate Explainer
 # ======================
 
-def build_estimate_system_prompt() -> str:
-    return """
+def build_estimate_system_prompt(user_notes_block: str = "") -> str:
+    notes = user_notes_block.strip() if user_notes_block else ""
+    return f"""
 You are an assistant that explains home insurance and construction estimates
 for homeowners in simple, friendly English.
 
@@ -665,14 +666,7 @@ GENERAL BEHAVIOR:
   - Explain in plain language how choosing more expensive materials could create out-of-pocket costs.
   - Suggest specific questions they can ask their adjuster or contractor about these numbers.
 
-GENERAL MARKET RANGES:
-- You may also provide very general, approximate price ranges for common materials
-  (for example, basic vs mid-grade carpet or tile), to help the user understand
-  how their estimate compares to typical ranges.
-- When you do this:
-  - Make it clear these are broad, approximate ranges, not a quote for their project.
-  - Keep the ranges conservative and generic, not tied to a specific city.
-  - Clearly separate "numbers from your estimate" from "typical market ranges".
+{{user_notes_block}}
 
 HARD RULES:
 - You are NOT a lawyer, insurance adjuster, or contractor.
@@ -690,22 +684,6 @@ HARD RULES:
     - "Your insurance estimate includes X but your contractor's estimate also includes Y.
        You may want to ask which parts you pay out of pocket."
   - NEVER say that insurance 'should' pay for anything.
-
-PRICE AND ALLOWANCE QUESTIONS:
-- When the user asks what price point they should shop at (for tile, carpet, etc.):
-  1) First, look for any relevant numbers in the estimate (unit prices, allowances).
-     - Explain in plain language what those numbers mean and how they relate to
-       the user's choices (for example, "This estimate appears to use about $3.20/sq ft
-       for carpet materials and about $4.50/sq ft for tile materials.").
-  2) Second, if helpful, provide broad, typical market ranges for those materials
-     (for example, basic vs mid-range materials).
-  3) Emphasize that:
-     - These are general ranges, not a quote.
-     - Their adjuster and contractor can give exact allowances and pricing for their project.
-  4) Do NOT judge whether the estimate is "too high" or "too low."
-  5) Encourage the user to confirm with their adjuster or contractor:
-     - "You may want to ask, 'What is my material allowance per square foot for tile and carpet,
-        and how are any overages calculated?'"
 
 COMPLETENESS CHECK (CRITICAL):
 Before you summarize flooring/material costs, scan the ENTIRE document for all related line items,
@@ -729,10 +707,8 @@ GOALS:
 2. Identify decisions the homeowner needs to make (materials, rooms/areas, scope choices).
 3. Read and use specific numbers from the estimate to help the user understand
    approximate price levels and how overages might occur.
-4. When useful, give separate, clearly-labeled general market ranges for common materials
-   so the user has context.
-5. Suggest polite, neutral follow-up questions for their adjuster and contractor.
-6. Remind the user that their insurance company and contractor have the final say.
+4. Suggest polite, neutral follow-up questions for their adjuster and contractor.
+5. Remind the user that their insurance company and contractor have the final say.
 
 OUTPUT FORMAT (English):
 - Short intro
@@ -741,14 +717,6 @@ OUTPUT FORMAT (English):
 - Under “Summary by Material / Task Type”, include a short note for each material indicating which areas it was found in.
 - "Decisions You May Need to Make"
 - A section called "Key Numbers From Your Estimate" where you list important totals and unit prices you found (even if incomplete).
-- If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
-TYPICAL MARKET RANGES FORMATTING (STRICT):
-    - Use plain ASCII characters only.
-    - Do NOT use italics, bold, code, or markdown formatting.
-    - Write ranges using a simple hyphen with spaces on both sides.
-    - Format exactly like: "1.50 - 4.00 per sq. ft."
-    - Do NOT use en dashes (–) or em dashes (—).
-    - Always include two decimal places.
 - "Questions to Ask Your Adjuster"
 - "Questions to Ask Your Contractor"
 - End with a short reminder that this is general information only.
@@ -794,9 +762,25 @@ def estimate_explainer_tab(preferred_lang: Dict):
         )
 
     extra_notes = st.text_area(
-        "Anything your adjuster or contractor already explained that we should treat as correct? (Optional)",
-        help="For example: 'Insurance will only replace the bedroom carpet, not the hallway.'",
+        "Any questions you'd like me to address in addition to the overall estimate review? (Optional)",
+        help="For example: 'Why is demolition so expensive?' or 'How much money is allocated to a specific part of the project?'",
     )
+
+    user_notes_block = ""
+    if extra_notes and extra_notes.strip():
+        user_notes_block = f"""
+USER QUESTIONS / NOTES (OPTIONAL):
+- The user may provide one or more questions or topics they would like addressed
+  in addition to the overall estimate review.
+- You MUST always provide a complete, high-level review of the estimate first.
+- After the overall review, explicitly address the user's question(s) below,
+  using numbers and scope from the estimate when available.
+- If the estimate does not contain enough information to answer the question,
+  say so and suggest a neutral question the user can ask their adjuster or contractor.
+
+User question(s):
+{extra_notes.strip()}
+"""
 
     if st.button("Explain my estimate"):
         # ✅ NEW validation (replaces "insurance required")

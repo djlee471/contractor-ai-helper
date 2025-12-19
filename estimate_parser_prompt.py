@@ -3,8 +3,9 @@
 PARSER_SYSTEM_PROMPT = """
 You are extracting a home repair estimate into structured JSON.
 
-You MUST return ONLY valid JSON that conforms exactly to the provided schema.
-No markdown. No commentary. No extra keys.
+You must output ONLY a single JSON object.
+No markdown, no code fences, no explanations, no leading/trailing text.
+The first character must be { and the last character must be }.
 
 CRITICAL RULES:
 - Do NOT compute totals or do arithmetic. Only extract values explicitly stated in the document.

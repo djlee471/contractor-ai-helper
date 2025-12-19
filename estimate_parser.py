@@ -25,11 +25,20 @@ TYPE RULES:
 doc_role: {doc_role}
 file_name: {filename}
 
+LINE ITEMS LIMIT (CRITICAL):
+- Extract at most 20 line_items total.
+- If the document contains more line items than you extracted, set:
+  source.has_more_line_items = true
+  source.line_items_extracted = <number extracted>
+- Then STOP adding line items and finish the JSON (close all braces).
+
 Fill this schema (no extra keys):
 - schema_version: "1.0.0"
 - source: object including at least:
   - doc_role: "{doc_role}"
   - file_name: "{filename}"
+  - has_more_line_items: true/false or null
+  - line_items_extracted: number or null
 - format_family: "xactimate_like" or "freeform" or "unknown"
 - line_items: list of objects with:
   - id (string, create stable ids like "LI-0001")
@@ -45,6 +54,12 @@ Fill this schema (no extra keys):
 
 Note:
 - quantity.provenance and unit_price.provenance follow the same structure: {{ page, method }} or null
+
+PRIORITY ORDER:
+1) source, schema_version, format_family
+2) line_items (up to the limit)
+3) document_totals
+4) all remaining fields may be empty or default if needed to keep JSON valid
 
 document_totals: extract stated totals if present (subtotal, tax, overhead_profit, rcv_total, acv_total, net_claim)
 computed_totals: leave as defaults/zeros; do NOT compute
@@ -190,18 +205,31 @@ def parse_estimate_doc(
         model=model,
         instructions=PARSER_SYSTEM_PROMPT,
         input=user_prompt,
-        max_output_tokens=2500,
+        max_output_tokens=12000,
         temperature=0.0,
         store=False,
     )
 
     raw_text = _strip_code_fences(resp.output_text)
+    print("MAIN OUTPUT LENGTH:", len(raw_text))
+    used_repair = False
 
     # First attempt: extract first JSON object and parse
     try:
+        if not raw_text.lstrip().startswith("{"):
+            print("DIRECT OUTPUT DOES NOT START WITH '{' (first 200 chars):")
+            print(raw_text[:200])
+
         raw_json = extract_first_json_object(raw_text)
         data = json.loads(raw_json)
-    except Exception:
+
+    except Exception as e:
+        print("DIRECT PARSE FAILED:", repr(e))
+        print("DIRECT OUTPUT (first 400 chars):")
+        print(raw_text[:400])
+
+        used_repair = True
+
         # Repair pass (only if first attempt fails)
         repair_instructions = (
             "You fix malformed JSON and return ONLY valid JSON.\n"
@@ -215,7 +243,7 @@ def parse_estimate_doc(
             "- If a string value is causing issues, shorten it aggressively or replace with \"\".\n"
             "- Do not add new keys (do not invent fields).\n"
             "- No trailing commas.\n"
-            "- Provenance may include only {page, method}. Do not include snippet or source_ref.\n"
+            "- Provenance may include only keys: page, method. Do not include snippet or source_ref.\n"
         )
 
         repair_input = f"""
@@ -272,6 +300,22 @@ CONTENT TO FIX:
     # Deterministic cleanup so validation isn't held hostage by long/raw/snippet fields
     data = prune_brittle_fields(data)
     data = normalize_estimate_json_types(data)
+
+    print("PARSE PATH:", "REPAIR" if used_repair else "DIRECT")
+    print("LINE ITEMS:", len(data.get("line_items", [])))
+    print("FORMAT FAMILY:", data.get("format_family"))
+
+    data.setdefault("source", {})
+    data["source"]["doc_role"] = doc_role
+    data["source"]["file_name"] = filename
+
+    if not isinstance(data.get("reconciliation"), list):
+        data["reconciliation"] = []
+        
+    # optional but recommended: guard other list fields
+    for k in ["assumptions_exclusions", "open_questions", "line_items"]:
+        if not isinstance(data.get(k), list):
+            data[k] = []
 
     validated = EstimateJSON.model_validate(data)
     return validated.model_dump()

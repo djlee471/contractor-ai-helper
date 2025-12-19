@@ -6,6 +6,14 @@ DocRole = Literal["insurance", "contractor"]
 FormatFamily = Literal["xactimate_like", "freeform", "unknown"]
 Currency = Literal["USD"]
 
+class Source(BaseModel):
+    doc_role: DocRole
+    file_name: str
+
+    # optional / hardening fields
+    has_more_line_items: Optional[bool] = None
+    line_items_extracted: Optional[int] = None
+
 class Provenance(BaseModel):
     page: Optional[int] = None
     method: Optional[str] = None
@@ -33,8 +41,8 @@ class LineItem(BaseModel):
     category: Optional[str] = None
 
     description: Description
-    quantity: Quantity = Field(default_factory=Quantity)
-    unit_price: Money = Field(default_factory=Money)
+    quantity: Optional[Quantity] = None
+    unit_price: Optional[Money] = None
 
     components: Dict[str, Money] = Field(default_factory=dict)  # material/labor/etc
     line_total: Money = Field(default_factory=Money)
@@ -43,12 +51,12 @@ class LineItem(BaseModel):
     provenance: Optional[Provenance] = None
 
 class DocumentTotals(BaseModel):
-    subtotal: Money = Field(default_factory=Money)
-    tax: Money = Field(default_factory=Money)
-    overhead_profit: Money = Field(default_factory=Money)
-    rcv_total: Money = Field(default_factory=Money)
-    acv_total: Money = Field(default_factory=Money)
-    net_claim: Money = Field(default_factory=Money)
+    subtotal: Optional[Money] = None
+    tax: Optional[Money] = None
+    overhead_profit: Optional[Money] = None
+    rcv_total: Optional[Money] = None
+    acv_total: Optional[Money] = None
+    net_claim: Optional[Money] = None
 
 class ComputedTotals(BaseModel):
     line_items_subtotal: float = 0.0
@@ -68,7 +76,7 @@ class EstimateJSON(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = "1.0.0"
-    source: Dict[str, Any]  # includes doc_role, filename, date, etc.
+    source: Source
 
     format_family: FormatFamily = "unknown"
 
