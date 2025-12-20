@@ -28,3 +28,6 @@ Thumbs.db
 # User files (uploaded estimates, etc)
 uploads/
 tmp/
+# PDFs / sample documents
+*.pdf
+

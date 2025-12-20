@@ -480,6 +480,7 @@ Translate the following text from English to neutral, clear Spanish.
     return translated.output_text
 
 
+# DEPRECATED: No longer used - switched to pdfplumber text extraction
 def build_estimate_pdf_content(
     insurance_files: List, contractor_files: List, extra_notes: str
 ) -> List[Dict]:
@@ -536,7 +537,7 @@ instructions in the system prompt.
 
     return content
 
-
+# DEPRECATED: No longer used - switched to pdfplumber text extraction  
 def call_gpt_estimate_with_pdfs(
     system_prompt: str,
     insurance_files: List,
@@ -634,6 +635,36 @@ def create_explanation_pdf(content, title, followups=None):
     pdf.multi_cell(0, 5, "This is general educational information only. Always consult your insurance adjuster and contractor for final decisions.")
     
     return pdf.output(dest='S').encode('latin-1')
+
+#======================
+# FIX MARKDOWN ISSUES
+#========================
+
+import re
+
+def sanitize_for_streamlit_markdown(md: str) -> str:
+    """
+    Reduce Streamlit markdown rendering quirks:
+    - remove inline arithmetic in parentheses (contains + or =)
+    - avoid bolding currency amounts (**$1,234**)
+    - optionally normalize unicode dashes already handled elsewhere
+    """
+    if not md:
+        return md
+
+    # 1) Drop parenthetical "math-y" fragments: (A 409 + B 100) or (x = y)
+    md = re.sub(r"\(([^)]*[\+=][^)]*)\)", "", md)
+
+    # 2) Unbold currency/amounts: **$1,234.56** -> $1,234.56
+    md = re.sub(r"\*\*(\s*\$?\d[\d,]*(?:\.\d{1,2})?)\s*\*\*", r"\1", md)
+
+    # 3) Clean double spaces left behind
+    md = re.sub(r"[ \t]{2,}", " ", md)
+
+    return md.strip()
+
+
+
 # ======================
 # Mini-Agent A: Estimate Explainer
 # ======================
@@ -657,101 +688,136 @@ DOCUMENT READING:
 - ONLY say that the text is unreadable if it is truly empty or clearly not an estimate at all.
 - Do NOT say things like "the text you provided is not in a readable format" if any real text is present. In that case, always do your best to extract key numbers, even if formatting is imperfect.
 
-GENERAL BEHAVIOR:
-- Explain what the estimate is doing in plain English, grouped by room/area when possible.
-- Identify key decisions the homeowner needs to make (materials, areas, scope choices).
-- When the user asks about price points, allowances, or overages, you may:
-  - Point out what unit prices or allowances the estimate appears to use for materials like tile, carpet, baseboards, etc.
-  - Explain in plain language how choosing more expensive materials could create out-of-pocket costs.
-  - Suggest specific questions they can ask their adjuster or contractor about these numbers.
+MULTI-PAGE MATERIAL TRACKING:
+When explaining costs for materials that span multiple pages or areas:
+- For materials appearing in multiple rooms, note all locations: "Carpet work includes Master Bedroom, Stairs, Hallway, and Landing. Total carpet cost across these areas: approximately $[X]"
+- Do NOT say "carpet costs $X" if you only looked at one section
+- Look for continuation indicators: "CONTINUED", "(cont)", repeated area names across pages
 
-GENERAL MARKET RANGES:
-- You may also provide very general, approximate price ranges for common materials
-  (for example, basic vs mid-grade carpet or tile), to help the user understand
-  how their estimate compares to typical ranges.
-- When you do this:
-  - Make it clear these are broad, approximate ranges, not a quote for their project.
-  - Keep the ranges conservative and generic, not tied to a specific city.
-  - Clearly separate "numbers from your estimate" from "typical market ranges".
+CONTINUATION PAGE RULES:
+- If you see "CONTINUED - [Area]" at the top of a page, the line items on that page belong to the previous area
+- Add these costs to your running total for that material
+
+GENERAL BEHAVIOR:
+- Focus on high-level interpretation, not exhaustive line-item detail
+- Identify individual rooms/areas where work is being done (Garage, Loft, Kitchen, Laundry, Office, Stairs, etc.)
+- CRITICAL: Skip generic labels like "Main Level", "First Floor", "Second Floor", "Upper Level" - these are NOT rooms
+  * If you see costs under "Main Level" without a specific room name, those costs belong to the rooms listed within that section
+  * Only list actual rooms (Garage, Kitchen, Bedroom, etc.), not building levels
+- For each room, describe the TYPE of work and the total cost
+- Pull document-level totals (RCV, ACV, deductible, net payment) from the summary page
+
+MATERIAL COST CALCULATION:
+When stating a total cost for a material category across rooms (e.g., carpet, tile, flooring, drywall):
+- NEVER use room-level totals (e.g., "Loft total: $3,090") to estimate a material cost.
+- ONLY use line-item totals that clearly and explicitly correspond to that material
+  (e.g., carpet, carpet pad, removal of carpet, stair step charges).
+- Do NOT show intermediate arithmetic or formulas (no "X + Y = Z")
+- Do NOT use room-level TOTALS (e.g., "Loft total: $3,090") to estimate a material cost.
+- It IS allowed to use individual line items located within a room section,
+  as long as the line item itself clearly corresponds to the material
+  (e.g., "Remove carpet", "Carpet, plush", "Carpet pad", "Stair step charge").
+- Provide a single total dollar amount for that material (and list the rooms/areas it appears in).
+    - Use language "around" or "roughly" to reflect uncertainty.
+- Keep it simple and readable
+
+
+FORMATTING (IMPORTANT):
+- Avoid using bold or italics around numeric amounts (e.g., do not write **$1,622**).
+- When explaining what a cost includes, put the explanation on a new line (not in parentheses right after the amount).
+  Example:
+  Total carpet cost: $1,628.89
+  Includes removal, pad, new carpet, and stair step charges.
+
+
+USER QUESTIONS OR CONTEXT (IMPORTANT):
+- The user may provide additional notes in two ways:
+  1. Context from their adjuster/contractor (treat as authoritative)
+  2. Specific questions they want answered about the estimate
+
+- You MUST always provide a complete high-level explanation first
+- After your main explanation, if the user provided specific questions or notes, 
+  address them in a dedicated section called "Addressing Your Specific Questions"
+- Use the estimate data to answer their questions when possible
+- If the estimate doesn't contain enough information to answer, say so and suggest 
+  a neutral question they can ask their adjuster or contractor
 
 HARD RULES:
 - You are NOT a lawyer, insurance adjuster, or contractor.
-- Treat any statements from the insurance company, policy documents,
-  or contractor as authoritative.
+- Treat any statements from the insurance company, policy documents, or contractor as authoritative.
 - NEVER say that an estimate is wrong, unfair, or incomplete.
 - NEVER say what the insurance company "should" cover or "should" pay.
-- You may ONLY suggest neutral questions the user can ask their adjuster
-  or contractor, such as:
+- You may ONLY suggest neutral questions the user can ask their adjuster or contractor, such as:
   - "You may want to ask your adjuster whether..."
   - "You can confirm with your contractor if..."
 - If the user uploads both an insurance estimate and a contractor estimate:
   - You MAY point out clear structural differences (e.g., one includes paint and the other does not),
     but ALWAYS frame them as questions to ask:
-    - "Your insurance estimate includes X but your contractor's estimate also includes Y.
-       You may want to ask which parts you pay out of pocket."
+    - "Your insurance estimate includes X but your contractor's estimate also includes Y. You may want to ask which parts you pay out of pocket."
   - NEVER say that insurance 'should' pay for anything.
 
-PRICE AND ALLOWANCE QUESTIONS:
-- When the user asks what price point they should shop at (for tile, carpet, etc.):
-  1) First, look for any relevant numbers in the estimate (unit prices, allowances).
-     - Explain in plain language what those numbers mean and how they relate to
-       the user's choices (for example, "This estimate appears to use about $3.20/sq ft
-       for carpet materials and about $4.50/sq ft for tile materials.").
-  2) Second, if helpful, provide broad, typical market ranges for those materials
-     (for example, basic vs mid-range materials).
-  3) Emphasize that:
-     - These are general ranges, not a quote.
-     - Their adjuster and contractor can give exact allowances and pricing for their project.
-  4) Do NOT judge whether the estimate is "too high" or "too low."
-  5) Encourage the user to confirm with their adjuster or contractor:
-     - "You may want to ask, 'What is my material allowance per square foot for tile and carpet,
-        and how are any overages calculated?'"
+COMPLETENESS CHECK - MATERIALS (CRITICAL):
+When summarizing costs by material type, think holistically about all related costs:
 
-COMPLETENESS CHECK (CRITICAL):
-Before you summarize flooring/material costs, scan the ENTIRE document for all related line items,
-even if they appear under different “areas” or on “CONTINUED” pages.
+* Flooring materials often include multiple components:
+  - Main material (carpet, tile, LVP, hardwood)
+  - Underlayment or pad
+  - Removal of old material
+  - Installation labor (may be separate line items)
+  - Related materials (grout, sealer, transitions, thresholds)
 
-For CARPET specifically, you MUST look for and include costs from:
-- Stairs / stair landings / “Stairs (A1)” / “Landing” / “Hallway” / “Closet” / “Subroom”
-- Any “CONTINUED - <Area>” sections on the next page
-- Items that are not labeled as “carpet” but are part of carpet scope, such as:
-  - “R&R Carpet pad”
-  - “Remove Carpet” / “Remove Carpet pad”
-  - Stair-specific labor such as “step charge” or “waterfall” installation
-  - Transitions / thresholds (if present)
+* Other work may include related costs:
+  - Cabinets → hardware, installation, removal
+  - Countertops → fabrication, installation, removal
+  - Plumbing → fixtures, supply lines, labor
+  - Electrical → fixtures, switches, outlets, labor
 
-After you list carpet numbers, do a quick cross-check:
-- If any area in the document contains “carpet” / “pad” / “step charge” / “waterfall”, it must be reflected
-  either in the carpet section or explicitly stated as “found in <Area>: <line item>”.
+Scan the ENTIRE document for related costs, even if they:
+- Appear under different room names
+- Are on "CONTINUED" pages
+- Have slightly different labels (e.g., "R&R Carpet" vs "Remove Carpet")
+- Are in unexpected categories (e.g., stair labor under "Stairs" not "Flooring")
+
+When you state a total for a material, make sure you've included all the pieces.
 
 GOALS:
 1. Explain major sections of the estimate in plain English, grouped by room/area when possible.
 2. Identify decisions the homeowner needs to make (materials, rooms/areas, scope choices).
-3. Read and use specific numbers from the estimate to help the user understand
-   approximate price levels and how overages might occur.
-4. When useful, give separate, clearly-labeled general market ranges for common materials
-   so the user has context.
+3. Read and use specific numbers from the estimate to help the user understand the unit prices and allowances being used.
+4. Answer any specific questions the user asked using data from the estimate.
 5. Suggest polite, neutral follow-up questions for their adjuster and contractor.
 6. Remind the user that their insurance company and contractor have the final say.
 
 OUTPUT FORMAT (English):
 - Short intro
-- "Summary by Area"
-- "Summary by material / task type" (if helpful)
-- Under “Summary by Material / Task Type”, include a short note for each material indicating which areas it was found in.
-- "Decisions You May Need to Make"
-- A section called "Key Numbers From Your Estimate" where you list important totals and unit prices you found (even if incomplete).
-- If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
-TYPICAL MARKET RANGES FORMATTING (STRICT):
-    - Use plain ASCII characters only.
-    - Do NOT use italics, bold, code, or markdown formatting.
-    - Write ranges using a simple hyphen with spaces on both sides.
-    - Format exactly like: "1.50 - 4.00 per sq. ft."
-    - Do NOT use en dashes (–) or em dashes (—).
-    - Always include two decimal places.
-- "Questions to Ask Your Adjuster"
-- "Questions to Ask Your Contractor"
-- End with a short reminder that this is general information only.
+
+- "Summary by Area" 
+  For each room/area, provide:
+  * What work is being done (brief description, not line-by-line)
+  * Total cost for that room
+  Example: "Garage: Drywall repair, insulation, and painting throughout. Total: $2,949"
+  
+- "Summary by material"
+  * Just focus on the general categories and big-ticket items.
+  * Provide total cost for that material.
+  * Be sure to include all related costs for that material
+    - For example, carpet removal, pad, carpet, installation
+    - For example, tile, grout, installation
+
+- "Key Numbers From Your Estimate"
+  * Replacement Cost Value (RCV): $[X]
+  * Deductible: $[X]
+  * Net Payment: $[X]
+  * General Contractor Overhead & Profit (if present): $[X]
+  * Material sales tax: $[X] (if significant)
+
+- If user provided questions/notes: "Addressing Your Specific Questions"
+
+- "Questions to Ask Your Adjuster" (2-3 most relevant questions)
+
+- "Questions to Ask Your Contractor" (2-3 most relevant questions)
+
+- End with a short reminder that this is general information only
 """.strip()
 
 def estimate_explainer_tab(preferred_lang: Dict):
@@ -794,12 +860,13 @@ def estimate_explainer_tab(preferred_lang: Dict):
         )
 
     extra_notes = st.text_area(
-        "Anything your adjuster or contractor already explained that we should treat as correct? (Optional)",
-        help="For example: 'Insurance will only replace the bedroom carpet, not the hallway.'",
+        "Any specific questions about this estimate? (Optional)",
+        help="For example: 'Why is demolition so expensive?' or 'What's included in the carpet cost?'",
+        placeholder="Example: How much of the carpet cost is for materials vs labor?"
     )
 
     if st.button("Explain my estimate"):
-        # ✅ NEW validation (replaces "insurance required")
+        # Validation
         if not has_insurance and not has_contractor:
             st.warning("Please select at least one estimate type.")
             return
@@ -817,7 +884,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
             return
 
         with st.spinner("Reading your estimate PDFs and preparing an explanation..."):
-            # ✅ KEEP: store PDFs as bytes for follow-ups
+            # Store PDFs as bytes for follow-ups
             st.session_state["estimate_insurance_pdfs"] = [
                 {"name": f.name, "type": f.type, "bytes": f.getvalue()}
                 for f in (insurance_files or [])
@@ -828,34 +895,69 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 for f in (contractor_files or [])
             ]
 
-            # ✅ OPTIONAL BUT RECOMMENDED: unified list for future JSON pipeline
-            st.session_state["estimate_docs"] = (
-                [{"role": "insurance", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (insurance_files or [])]
-                + [{"role": "contractor", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (contractor_files or [])]
-            )
+            # Extract text with pdfplumber
+            from estimate_extract import extract_pdf_pages_text, join_page_packets
+            
+            all_extracted_text = ""
+            
+            # Extract from insurance files
+            for f in (insurance_files or []):
+                packets = extract_pdf_pages_text(f.getvalue())
+                all_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n"
+                all_extracted_text += join_page_packets(packets)
+            
+            # Extract from contractor files
+            for f in (contractor_files or []):
+                packets = extract_pdf_pages_text(f.getvalue())
+                all_extracted_text += f"\n\n=== CONTRACTOR ESTIMATE: {f.name} ===\n\n"
+                all_extracted_text += join_page_packets(packets)
+            
+            # Build user content with extracted text
+            user_content = f"""
+[USER CONTEXT]
 
+The user is a homeowner trying to understand one or more estimates for home repair or reconstruction.
+
+"""
+            
+            if extra_notes and extra_notes.strip():
+                user_content += f"""
+USER'S NOTES OR QUESTIONS (address these explicitly):
+{extra_notes.strip()}
+
+"""
+            
+            user_content += f"""
+EXTRACTED ESTIMATE TEXT:
+
+{all_extracted_text}
+"""
+            
+            # Call GPT with text (not PDF)
             system_prompt = build_estimate_system_prompt()
-            english_answer = call_gpt_estimate_with_pdfs(
+            english_answer = call_gpt(
                 system_prompt=system_prompt,
-                insurance_files=insurance_files or [],
-                contractor_files=contractor_files or [],
-                extra_notes=extra_notes or "",
+                user_content=user_content,
                 max_output_tokens=1100,
+                temperature=0.4,
             )
 
-            # ✅ Normalize unicode dashes for consistent on-screen rendering (and PDF/email)
+            # Normalize unicode dashes
             english_answer = english_answer.replace("–", "-").replace("—", "-")
-                                                          
+
+            # Sanitize markdown for Streamlit rendering
+            english_answer = sanitize_for_streamlit_markdown(english_answer)
+
             translated_answer = translate_if_needed(
                 english_answer, preferred_lang["code"]
             )
 
             # Store explanation for follow-ups
             st.session_state["estimate_explanation_en"] = english_answer
-            st.session_state["estimate_translated"] = translated_answer  # ADD THIS
+            st.session_state["estimate_translated"] = translated_answer
             st.session_state["estimate_extra_notes"] = extra_notes
 
-    # MOVE display code HERE - outside button block
+    # Display explanation (outside button block)
     if "estimate_explanation_en" in st.session_state and st.session_state["estimate_explanation_en"]:
         st.markdown("### Explanation")
         st.markdown(st.session_state["estimate_explanation_en"])
@@ -864,7 +966,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
             st.markdown("### Spanish Translation")
             st.markdown(st.session_state["estimate_translated"])
 
-        # Export buttons - indented inside the if block
+        # Export buttons
         col1, col2 = st.columns(2)
         
         with col1:
@@ -901,7 +1003,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
                     unsafe_allow_html=True,
                 )
 
-    # Follow-up (ONLY show after initial explanation exists)
+    # Follow-up section
     if st.session_state.get("estimate_explanation_en"):
         st.markdown("---")
         st.markdown("#### Follow-up question about this explanation")
@@ -918,17 +1020,12 @@ def estimate_explainer_tab(preferred_lang: Dict):
             else:
                 prev_expl = st.session_state.get("estimate_explanation_en", "")
                 extra_prev = st.session_state.get("estimate_extra_notes", "")
-
-                # Retrieve stored PDFs (bytes) so follow-ups are reproducible
                 insurance_pdf_data = st.session_state.get("estimate_insurance_pdfs", [])
                 contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
 
-                # Defensive checks (should usually pass if the user already ran Explain)
-                docs = st.session_state.get("estimate_docs", [])
-
                 if not prev_expl.strip():
                     st.warning("Please run **Explain my estimate** first.")
-                elif not docs:
+                elif not insurance_pdf_data and not contractor_pdf_data:
                     st.warning(
                         "Your uploaded estimate PDFs aren't available anymore. "
                         "Please re-upload and run **Explain my estimate** again."
@@ -936,59 +1033,63 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 else:
                     with st.spinner("Generating follow-up explanation..."):
                         follow_system = build_estimate_system_prompt() + """
-    You are answering a follow-up question about an estimate explanation you already provided.
 
-    CRITICAL INSTRUCTIONS:
-    - Do NOT regenerate or rewrite the entire explanation
-    - Do NOT repeat information already covered in the previous explanation
-    - ONLY provide additional detail, clarification, or specific information about what the user asked
-    - Keep your response focused and concise (2-4 paragraphs maximum)
-    - You have access to the original estimate PDFs again, so you can reference specific line items, numbers, or details if the user asks about them
-    - If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
-    - Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
+You are answering a follow-up question about an estimate explanation you already provided.
 
-    Your goal is to ADD to the conversation, not restart it.
-    """.strip()
+CRITICAL INSTRUCTIONS:
+- Do NOT regenerate or rewrite the entire explanation
+- Do NOT repeat information already covered in the previous explanation
+- ONLY provide additional detail, clarification, or specific information about what the user asked
+- Keep your response focused and concise (2-4 paragraphs maximum)
+- You have access to the original estimate text again, so you can reference specific line items, numbers, or details if the user asks about them
+- If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
+- Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
+
+Your goal is to ADD to the conversation, not restart it.
+""".strip()
 
                         follow_notes = f"""
-    PREVIOUS EXPLANATION (for context):
-    {prev_expl}
+PREVIOUS EXPLANATION (for context):
+{prev_expl}
 
-    USER'S FOLLOW-UP QUESTION:
-    {follow_q}
+USER'S FOLLOW-UP QUESTION:
+{follow_q}
 
-    ORIGINAL NOTES FROM USER:
-    {extra_prev or 'None provided'}
-    """.strip()
+ORIGINAL NOTES FROM USER:
+{extra_prev or 'None provided'}
+""".strip()
 
-                        # Reconstruct file-like objects from stored bytes
-                        from io import BytesIO
-
-                        insurance_files_reconstructed = []
+                        # Re-extract text for follow-up
+                        from estimate_extract import extract_pdf_pages_text, join_page_packets
+                        
+                        all_text = ""
                         for pdf_data in insurance_pdf_data:
-                            file_obj = BytesIO(pdf_data["bytes"])
-                            file_obj.name = pdf_data["name"]
-                            file_obj.type = pdf_data["type"]
-                            insurance_files_reconstructed.append(file_obj)
-
-                        contractor_files_reconstructed = []
+                            packets = extract_pdf_pages_text(pdf_data["bytes"])
+                            all_text += f"\n\n=== INSURANCE: {pdf_data['name']} ===\n\n"
+                            all_text += join_page_packets(packets)
+                        
                         for pdf_data in contractor_pdf_data:
-                            file_obj = BytesIO(pdf_data["bytes"])
-                            file_obj.name = pdf_data["name"]
-                            file_obj.type = pdf_data["type"]
-                            contractor_files_reconstructed.append(file_obj)
+                            packets = extract_pdf_pages_text(pdf_data["bytes"])
+                            all_text += f"\n\n=== CONTRACTOR: {pdf_data['name']} ===\n\n"
+                            all_text += join_page_packets(packets)
+                        
+                        follow_user_content = f"""
+{follow_notes}
 
-                        follow_en = call_gpt_estimate_with_pdfs(
+EXTRACTED ESTIMATE TEXT:
+{all_text}
+"""
+                        
+                        follow_en = call_gpt(
                             system_prompt=follow_system,
-                            insurance_files=insurance_files_reconstructed,
-                            contractor_files=contractor_files_reconstructed,
-                            extra_notes=follow_notes,
+                            user_content=follow_user_content,
                             max_output_tokens=700,
+                            temperature=0.4,
                         )
 
-                        # Normalize dashes for consistent rendering/export
+                        # Normalize dashes
                         follow_en = follow_en.replace("–", "-").replace("—", "-")
-
+                        follow_en = sanitize_for_streamlit_markdown(follow_en)
                         follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
                     # Store follow-up
@@ -1009,18 +1110,14 @@ def estimate_explainer_tab(preferred_lang: Dict):
         st.markdown("---")
         st.caption("Run **Explain my estimate** first to enable follow-up questions.")
 
-    # Full disclaimers at bottom
+    # Disclaimers
     st.markdown("---")
-
-    # English block first
     st.markdown(BASE_DISCLAIMER_EN)
-    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+    st.markdown(AGENT_A_DISCLAIMER_EN)
 
-    # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
         st.markdown(AGENT_A_DISCLAIMER_ES)
-
 
 
 # ======================
@@ -1029,8 +1126,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
 
 def build_renovation_system_prompt() -> str:
     return """
-You are an assistant that explains typical sequences for home repair projects,
-especially after water damage (e.g., laundry room leaks, bedroom carpet damage).
+You are a friendly and personable assistant that explains typical sequences for home repair projects.
 
 HARD RULES:
 - You are NOT the user's contractor, engineer, or inspector.
