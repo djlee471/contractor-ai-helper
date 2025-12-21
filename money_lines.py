@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import List, Optional
 
 
+# Matches dollar amounts like "$1,234.56"
 MONEY_RE = re.compile(
     r"""
     (?P<sign>[-–—])?\s*          # optional minus-like sign
@@ -19,6 +20,12 @@ MONEY_RE = re.compile(
     re.VERBOSE,
 )
 
+# Matches numbered line items like "27. Carpet ..."
+LINE_ITEM_RE = re.compile(r"^\s*\d+\.\s+")
+
+# Matches plain money-like numbers without "$", e.g. "1,166.14"
+NUM_MONEY_RE = re.compile(r"\b\d{1,3}(?:,\d{3})*\.\d{2}\b")
+
 WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -27,7 +34,7 @@ class MoneyLine:
     id: int                # line index in the filtered stream
     raw_line_no: int       # line index in the original text stream
     text: str              # cleaned line text
-    amount: Decimal        # extracted last $X.XX on line
+    amount: Decimal        # extracted line-item or $ amount
 
 
 def _clean_line(s: str) -> str:
@@ -37,53 +44,72 @@ def _clean_line(s: str) -> str:
 
 
 def _parse_money_token(token: str, sign: Optional[str]) -> Optional[Decimal]:
-    # token is like "1,234.56" or "1234"
     try:
         val = Decimal(token.replace(",", ""))
     except InvalidOperation:
         return None
+
     if sign and sign.strip() in {"-", "–", "—"}:
         val = -val
-    # normalize to cents if needed
-    if val == val.to_integral():
-        # allow whole-dollar amounts
-        return val
+
     return val
 
 
-def extract_money_lines(text: str, *, min_abs_amount: Decimal = Decimal("0.01")) -> List[MoneyLine]:
+def extract_money_lines(
+    text: str,
+    *,
+    min_abs_amount: Decimal = Decimal("0.01"),
+) -> List[MoneyLine]:
     """
-    Extract a flat list of candidate lines that contain at least one $ amount.
-    We take the LAST $ amount on the line as 'amount' (matches your design).
+    Extract candidate money lines.
+
+    Supports:
+    1) Numbered line items where the RCV appears as a plain number
+       (e.g. "27. Carpet ... 1,166.14")
+    2) Lines with explicit $ amounts (summary / financial lines)
+
+    Preference is given to numbered line items.
     """
     out: List[MoneyLine] = []
     lines = text.splitlines()
-
     filtered_id = 0
+
     for raw_i, line in enumerate(lines):
         cleaned = _clean_line(line)
         if not cleaned:
             continue
 
-        matches = list(MONEY_RE.finditer(cleaned))
-        if not matches:
-            continue
+        amt: Optional[Decimal] = None
 
-        last = matches[-1]
-        sign = last.group("sign")
-        token = last.group("num")
-        amt = _parse_money_token(token, sign)
+        # --- Path 1: numbered line items (preferred) ---
+        if LINE_ITEM_RE.match(cleaned):
+            nums = NUM_MONEY_RE.findall(cleaned)
+            if nums:
+                token = nums[-1]  # last numeric column = line total (RCV)
+                amt = _parse_money_token(token, sign=None)
+
+        # --- Path 2: explicit $ amounts (fallback) ---
+        if amt is None:
+            matches = list(MONEY_RE.finditer(cleaned))
+            if matches:
+                last = matches[-1]
+                sign = last.group("sign")
+                token = last.group("num")
+                amt = _parse_money_token(token, sign)
+
         if amt is None:
             continue
         if abs(amt) < min_abs_amount:
             continue
 
-        out.append(MoneyLine(
-            id=filtered_id,
-            raw_line_no=raw_i,
-            text=cleaned,
-            amount=amt,
-        ))
+        out.append(
+            MoneyLine(
+                id=filtered_id,
+                raw_line_no=raw_i,
+                text=cleaned,
+                amount=amt,
+            )
+        )
         filtered_id += 1
 
     return out
