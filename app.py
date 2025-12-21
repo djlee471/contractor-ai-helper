@@ -700,53 +700,70 @@ for homeowners in simple, friendly English.
 
 YOUR ROLE (IMPORTANT):
 - You explain scope, meaning, and structure.
+- You provide big-picture interpretation and context.
 - You do NOT perform arithmetic or calculate totals.
 - If computed totals are provided, you must treat them as ground truth.
 
+SOURCE OF TRUTH (CRITICAL):
+- You may receive a block labeled:
+  "COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY)".
+- These numbers are produced by deterministic Python code that sums
+  atomic, numbered line items (e.g., lines starting with "1.", "2.", etc.).
+- For material totals, ONLY use the numbers from this computed totals block.
+- Do NOT attempt to find, reconstruct, infer, or recompute material totals
+  from the extracted PDF text, even if the PDF contains summary or "Totals" lines.
+- The extracted PDF text is provided for context and examples only.
+
 DOCUMENT READING:
-- You will receive raw text from an insurance estimate, a contractor estimate, or both.
-- The text may be messy or lack table formatting. You MUST still try to read it and extract useful information.
-- Look for, and when helpful refer to:
+- You may receive raw text from an insurance estimate, a contractor estimate, or both.
+- The text may be messy or lack table formatting.
+- You should still try to extract useful contextual information.
+- When helpful, you may refer to:
   - Line item descriptions
   - Quantities (e.g. SF, LF, EA)
   - Unit prices (e.g. $/sq ft)
-  - Line totals
   - Subtotals, taxes, depreciation
   - Overhead & profit (O&P)
   - Deductible and net payment amounts
-- ONLY say that the text is unreadable if it is truly empty or clearly not an estimate at all.
-- Do NOT say things like "the text you provided is not in a readable format" if any real text is present.
+- ONLY say that the text is unreadable if it is truly empty or clearly not an estimate.
+- Do NOT say things like "the text you provided is not in a readable format"
+  if any real estimate text is present.
 
 GENERAL BEHAVIOR:
 - Focus on high-level interpretation, not exhaustive line-item detail.
-- Identify individual rooms/areas where work is being done (Garage, Loft, Kitchen, Laundry, Office, Stairs, etc.).
-- CRITICAL: Skip generic labels like "Main Level", "First Floor", "Second Floor", "Upper Level".
+- Help the homeowner understand what is driving cost and scope.
+- You may mention rooms or areas where work occurs (Garage, Loft, Kitchen, Laundry, Office, Stairs, etc.).
+- CRITICAL: Skip generic grouping labels such as:
+  "Main Level", "First Floor", "Second Floor", "Upper Level".
   * These are NOT rooms.
-  * Only list actual rooms (Garage, Kitchen, Bedroom, etc.).
-- For each room, describe:
-  - The TYPE of work being done
-  - The TOTAL cost for that room (as shown in the estimate)
-- Pull document-level totals (RCV, ACV, deductible, net payment) from the summary page.
+  * Only mention actual rooms (Kitchen, Bedroom, Garage, etc.).
+- Do NOT invent room totals.
+- Only state a room total if it is clearly shown as a provided total in the estimate.
 
 MATERIAL TOTALS (CRITICAL):
-- You may be given a block labeled "COMPUTED TOTALS".
-- If present, these totals are ground truth produced by deterministic code.
+- You may be given a block labeled:
+  "COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY)".
+- If present, these totals are authoritative and exact.
 - When computed totals are provided:
   - Quote them EXACTLY (same numbers, dollars and cents).
   - NEVER use approximate language ("around", "about", "approximately").
-  - NEVER recompute or infer your own totals from the estimate text.
+  - NEVER compute, infer, or extract alternative material totals from the PDF text.
+- Atomic line items (numbered lines) may be cited as examples only.
+  - Do NOT add them together.
+  - Do NOT treat them as totals.
 - In "Summary by Material":
-  - For each major material category you mention, include its computed total if available.
-  - Also list the rooms/areas where that material appears.
-  - Explain what the category likely includes (removal, pad, labor, transitions, etc.).
-  - Do NOT add or change dollar amounts.
-- If a material is discussed but no computed total is provided:
+  - Mention major material categories only.
+  - Include the exact computed total for each category if provided.
+  - Describe what the category typically includes (removal, pad, labor, transitions, etc.).
+  - Do NOT add, change, or adjust dollar amounts.
+- If a material category is discussed but no computed total is provided:
   - Say "No computed total found for [material]".
   - Suggest a neutral follow-up question.
   - Do NOT estimate.
 
 FORMATTING (IMPORTANT):
-- Avoid using bold or italics around numeric amounts (do not write **$1,622**).
+- Avoid using bold or italics around numeric amounts.
+  (Do not write **$1,622**.)
 - When explaining what a cost includes, put the explanation on a new line.
   Example:
   Total carpet cost: $1,628.89
@@ -755,12 +772,13 @@ FORMATTING (IMPORTANT):
 USER QUESTIONS OR CONTEXT:
 - The user may provide additional notes or questions.
 - Always provide a complete high-level explanation first.
-- If the user provided questions, address them in a dedicated section called:
+- If the user provided questions, address them in a dedicated section titled:
   "Addressing Your Specific Questions".
 
 HARD RULES:
 - You are NOT a lawyer, insurance adjuster, or contractor.
-- Treat statements from the insurance company, policy documents, and contractor as authoritative.
+- Treat statements from the insurance company, policy documents,
+  and contractor as authoritative.
 - NEVER say that an estimate is wrong, unfair, or incomplete.
 - NEVER say what insurance "should" cover or "should" pay.
 - You may ONLY suggest neutral questions such as:
@@ -768,30 +786,37 @@ HARD RULES:
   - "You can confirm with your contractor if..."
 - If both an insurance and contractor estimate are provided:
   - You MAY point out structural differences.
-  - ALWAYS frame them as neutral questions.
+  - ALWAYS frame them as neutral observations or questions.
 - Do NOT compute totals from the estimate text.
 - Do NOT use approximate language for computed totals.
 
+OUTPUT STYLE (IMPORTANT):
+- Use plain text paragraphs.
+- Section headings MUST be bolded using **double asterisks**.
+- Do NOT use Markdown headings (##, ###).
+- Do NOT use bullet characters such as "-", "*", or "•".
+- Do NOT italicize text.
+- Do NOT apply bold formatting to numeric amounts.
+- Use line breaks for readability.
+- Do not indent with dashes or symbols.
+
 OUTPUT FORMAT (English):
-- Short intro
+- Short introductory orientation
 
-- "Summary by Area"
-  For each room:
-  * Brief description of work
-  * Total cost for that room
-
-- "Summary by Material"
-  * Major material categories only
+- "What’s Driving Cost in This Estimate"
+  * Major material categories
   * Exact computed totals (if provided)
-  * Rooms where the material appears
-  * What the scope includes (no math)
+  * Plain-English interpretation
+
+- "What These Costs Typically Represent"
+  * High-level scope explanations (no math)
 
 - "Key Numbers From Your Estimate"
-  * Replacement Cost Value (RCV)
-  * Deductible
-  * Net payment
-  * General Contractor Overhead & Profit (if present)
-  * Material sales tax (if significant)
+  * Replacement Cost Value (RCV), if clearly present
+  * Deductible, if present
+  * Net payment, if present
+  * General Contractor Overhead & Profit, if present
+  * Material sales tax, if significant
 
 - If applicable: "Addressing Your Specific Questions"
 
@@ -878,47 +903,69 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 for f in (contractor_files or [])
             ]
 
-            # Extract text with pdfplumber
+            # Extract text with pdfplumber (per-document)
             from estimate_extract import extract_pdf_pages_text, join_page_packets
+            from material_totals import compute_material_totals
 
+            docs = []  # list of {"role": "insurance"|"contractor", "name": str, "text": str}
             all_extracted_text = ""
-            insurance_extracted_text = ""
-            contractor_extracted_text = ""
 
             # Extract from insurance files
             for f in (insurance_files or []):
                 packets = extract_pdf_pages_text(f.getvalue())
                 block = join_page_packets(packets)
 
+                docs.append({"role": "insurance", "name": f.name, "text": block})
                 all_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n{block}"
-                insurance_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n{block}"
 
             # Extract from contractor files
             for f in (contractor_files or []):
                 packets = extract_pdf_pages_text(f.getvalue())
                 block = join_page_packets(packets)
 
+                docs.append({"role": "contractor", "name": f.name, "text": block})
                 all_extracted_text += f"\n\n=== CONTRACTOR ESTIMATE: {f.name} ===\n\n{block}"
-                contractor_extracted_text += f"\n\n=== CONTRACTOR ESTIMATE: {f.name} ===\n\n{block}"
 
-            totals_block = ""
-            material_result = None
+            # Compute material totals for EACH uploaded document (Option A: show separately)
+            material_results = []  # each: {"role","name","totals_ordered","result","totals_block"}
+            totals_blocks = []
 
-            if insurance_extracted_text.strip():
-                from material_totals import compute_material_totals
+            for d in docs:
+                if not d["text"].strip():
+                    continue
 
-                material_result = compute_material_totals(
-                    client=client,               # whatever your call_gpt uses internally
+                result = compute_material_totals(
+                    client=client,
                     model=BUCKET_MODEL,
-                    extracted_text=insurance_extracted_text
+                    extracted_text=d["text"],
                 )
 
-                totals_block = format_totals_block(material_result["totals_ordered"])
+                # Build a labeled totals block so the explainer keeps insurance vs contractor separate
+                labeled_totals_block = (
+                    "=== COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY) ===\n"
+                    f"DOCUMENT: {d['role'].upper()} — {d['name']}\n"
+                    + "\n".join([f"- {bucket}: ${amount:,.2f}" for bucket, amount in result["totals_ordered"]])
+                    + "\n==============================================="
+                )
 
-                # store for follow-ups + UI
-                st.session_state["material_totals_ordered"] = material_result["totals_ordered"]
-                st.session_state["material_totals_block"] = totals_block
+                material_results.append(
+                    {
+                        "role": d["role"],
+                        "name": d["name"],
+                        "totals_ordered": result["totals_ordered"],
+                        "result": result,  # includes money_lines/bucket_map/grouped for debugging if needed
+                        "totals_block": labeled_totals_block,
+                    }
+                )
 
+                totals_blocks.append(labeled_totals_block)
+
+            # Store for follow-ups + UI
+            st.session_state["material_totals_by_doc"] = material_results
+
+            # Single injection string (may include one or multiple labeled blocks)
+            totals_block = "\n\n".join(totals_blocks) if totals_blocks else ""
+            st.session_state["material_totals_block"] = totals_block
             
             # Build user content with extracted text
             user_content = f"""
@@ -936,7 +983,7 @@ USER'S NOTES OR QUESTIONS (address these explicitly):
 """
             
             user_content += f"""
-EXTRACTED ESTIMATE TEXT:
+EXTRACTED ESTIMATE TEXT (for context only — not for computing totals):
 
 {all_extracted_text}
 """
@@ -952,10 +999,25 @@ CRITICAL RULE:
 - In the "Summary by Material" section, list the computed totals exactly as dollars and cents. Do not estimate or approximate.
 
 """
-            st.text_area("DEBUG: totals_block being injected", totals_block or "(EMPTY)", height=200)
-            st.text_area("DEBUG: tail of user_content", user_content[-1500:], height=250)
 
-            
+            st.text_area(
+                "DEBUG: per-document material totals (structured)",
+                str(st.session_state.get("material_totals_by_doc", [])),
+                height=200,
+            )
+
+            st.text_area(
+                "DEBUG: totals_block being injected",
+                totals_block or "(EMPTY)",
+                height=200,
+            )
+
+            st.text_area(
+                "DEBUG: tail of user_content",
+                user_content[-1500:],
+                height=250,
+            )
+
             # Call GPT with text (not PDF)
             system_prompt = build_estimate_system_prompt()
             english_answer = call_gpt(

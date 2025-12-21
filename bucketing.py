@@ -13,7 +13,7 @@ def _build_bucketing_prompt(money_lines: List[MoneyLine]) -> str:
     items = [{"id": ml.id, "amount": str(ml.amount), "text": ml.text} for ml in money_lines]
 
     return (
-        "You are classifying insurance estimate line-items into cost buckets.\n"
+        "You are classifying estimate line-items into cost buckets.\n"
         "RULES:\n"
         "- Choose EXACTLY ONE bucket for each item.\n"
         "- Allowed buckets (no others):\n"

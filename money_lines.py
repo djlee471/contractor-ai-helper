@@ -113,3 +113,59 @@ def extract_money_lines(
         filtered_id += 1
 
     return out
+
+def extract_atomic_money_lines(
+    text: str,
+    *,
+    min_abs_amount: Decimal = Decimal("0.01"),
+) -> List[MoneyLine]:
+    """
+    Extract ONLY atomic, numbered estimate line items suitable for summation.
+
+    This intentionally excludes rollups / summary lines such as:
+    - Totals: Kitchen ...
+    - Total: Main Level ...
+    - RCV / ACV / deductible lines with explicit $ amounts
+
+    Eligibility rule:
+    - Line must start with a numbered line-item prefix (e.g., "27. ").
+    - Amount is the last money-like numeric token on the line (e.g., "1,166.14").
+
+    This is the safe input stream for material totals.
+    """
+    out: List[MoneyLine] = []
+    lines = text.splitlines()
+    filtered_id = 0
+
+    for raw_i, line in enumerate(lines):
+        cleaned = _clean_line(line)
+        if not cleaned:
+            continue
+
+        # Only numbered line items are eligible (atomic costs)
+        if not LINE_ITEM_RE.match(cleaned):
+            continue
+
+        # Grab the last money-like numeric token (RCV in Xactimate-like formats)
+        nums = NUM_MONEY_RE.findall(cleaned)
+        if not nums:
+            continue
+
+        token = nums[-1]
+        amt = _parse_money_token(token, sign=None)
+        if amt is None:
+            continue
+        if abs(amt) < min_abs_amount:
+            continue
+
+        out.append(
+            MoneyLine(
+                id=filtered_id,
+                raw_line_no=raw_i,
+                text=cleaned,
+                amount=amt,
+            )
+        )
+        filtered_id += 1
+
+    return out
