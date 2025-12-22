@@ -39,6 +39,11 @@ def bucket_money_lines(client, model: str, money_lines: List[MoneyLine]) -> Dict
     """
     prompt = _build_bucketing_prompt(money_lines)
 
+    # DEBUG 12/22
+    system_msg = "You follow instructions exactly and output only strict JSON."
+    prompt_chars = len(system_msg) + len(prompt)
+    print("[DEBUG] BUCKETING total prompt chars:", prompt_chars)
+
     resp = client.chat.completions.create(
         model=model,
         temperature=0,
@@ -46,7 +51,7 @@ def bucket_money_lines(client, model: str, money_lines: List[MoneyLine]) -> Dict
             {"role": "system", "content": "You follow instructions exactly and output only strict JSON."},
             {"role": "user", "content": prompt},
         ],
-        response_format={"type": "json_object"},
+  #      response_format={"type": "json_object"}, # speeds up bucketing by ignoring
     )
 
     raw = resp.choices[0].message.content

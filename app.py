@@ -732,6 +732,253 @@ def build_mini_atomic_sample_from_grouped(grouped: dict, totals_ordered, *, max_
     return "\n".join(out).strip()
 
 
+#========================================
+# FORMATTING ESTIMATE EXPLANATION
+#========================================
+import re
+from typing import List, Tuple, Optional
+
+BOLD_HEADING_LINE_RE = re.compile(r"^\*\*[^*\n]+\*\*$")
+
+def split_by_bold_headings(text: str) -> List[Tuple[Optional[str], str]]:
+    """
+    Splits plain-text explanation into sections delimited by bold-only heading lines.
+    Returns list of (heading_line_or_None, body_text).
+
+    - heading is the literal **Heading** line (including **), or None for intro.
+    - intro text (before first heading) becomes (None, intro_body).
+    """
+    if not text:
+        return []
+
+    lines = text.splitlines()
+    sections: List[Tuple[Optional[str], List[str]]] = []
+    current_heading: Optional[str] = None
+    current_body: List[str] = []
+
+    def flush():
+        nonlocal current_heading, current_body
+        body = "\n".join(current_body).strip("\n")
+        # Keep even empty bodies if a heading exists; skip fully empty intro
+        if current_heading is not None or body.strip():
+            sections.append((current_heading, body))
+        current_heading = None
+        current_body = []
+
+    seen_first_heading = False
+    for line in lines:
+        if BOLD_HEADING_LINE_RE.match(line.strip()):
+            if not seen_first_heading:
+                # everything accumulated so far is the intro -> Overview
+                flush()
+                seen_first_heading = True
+            else:
+                flush()
+            current_heading = line.strip()
+        else:
+            current_body.append(line)
+
+    flush()
+
+    # If the very first section ended up as (None, "") (e.g., text starts with heading), drop it
+    if sections and sections[0][0] is None and not sections[0][1].strip():
+        sections = sections[1:]
+
+    # If there was intro text but no headings at all, it will be (None, full_text)
+    return sections
+
+#===========================
+# ROOM TOTALS (EXPLICIT FROM PDF)
+#============================
+
+import re
+from typing import Dict, Tuple
+
+ROOM_TOTAL_LINE_RE = re.compile(r"^\s*Totals:\s*(.+?)\s+(.*)$")
+MONEY_RE = re.compile(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+(?:\.\d{2}))")
+
+# things that show up as "Totals:" but are NOT rooms
+NON_ROOM_TOTAL_LABELS = {
+    "Labor Minimums Applied",
+    "Line Item Totals",
+    "Recap of Taxes, Overhead and Profit",
+}
+
+# floor/sketch groupings (extra guard even though we ignore Area Totals already)
+NON_ROOM_NAME_EXACT = {
+    "Main Level",
+    "First Floor",
+    "Second Floor",
+    "Upper Level",
+    "Lower Level",
+    "Labor",
+}
+NON_ROOM_PREFIXES = ("SKETCH",)
+
+def extract_room_totals_from_text(extracted_text: str) -> Dict[str, str]:
+    """
+    Extract explicitly-provided room totals from estimate text.
+
+    Returns: {room_name: "$1,234.56"}  (keeps original comma formatting)
+    Only trusts lines that start with "Totals:" and have a clear final numeric total.
+    """
+    if not extracted_text:
+        return {}
+
+    out: Dict[str, str] = {}
+
+    for raw_line in extracted_text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("Totals:"):
+            continue
+
+        m = ROOM_TOTAL_LINE_RE.match(line)
+        if not m:
+            continue
+
+        room = m.group(1).strip()
+
+        # Reject known non-room labels
+        if room in NON_ROOM_TOTAL_LABELS:
+            continue
+
+        # Reject floor/group labels if they ever appear under Totals:
+        if room in NON_ROOM_NAME_EXACT:
+            continue
+        if any(room.upper().startswith(pfx) for pfx in NON_ROOM_PREFIXES):
+            continue
+
+        # Find numeric tokens on the rest of the line; use the LAST one as the total.
+        rest = m.group(2)
+        nums = MONEY_RE.findall(rest)
+        if not nums:
+            continue
+
+        total_str = nums[-1]  # last number on the line is the total in your PDF
+        # Ensure it looks like dollars+ cents OR at least a plausible number; keep as displayed.
+        # If you want strict cents: require '.' in total_str and len after dot == 2.
+
+        # Re-add "$" for display consistency (your text sometimes omits $)
+        out[room] = f"${total_str}"
+
+    return out
+
+def build_room_totals_block(room_totals: dict, *, doc_role: str, doc_name: str) -> str:
+    # Return empty string if nothing found
+    if not room_totals:
+        return ""
+
+    lines = [f"{room}: {amt}" for room, amt in sorted(room_totals.items(), key=lambda x: x[0].lower())]
+    if not lines:
+        return ""
+
+    return (
+        "=== PROVIDED ROOM TOTALS (FROM ESTIMATE — DO NOT MODIFY) ===\n"
+        f"DOCUMENT: {doc_role.upper()} — {doc_name}\n"
+        + "\n".join(lines)
+        + "\n=========================================================="
+    )
+
+#========================
+# SUMMARY NUMBERS FROM ESTIMATE PDF
+#=======================
+
+_MONEY_RE = re.compile(r"\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+(?:\.\d{2}))")
+
+def _money_from_line(line: str) -> Optional[str]:
+    """Return the first money-like token in the line as a display string with $."""
+    m = _MONEY_RE.search(line)
+    if not m:
+        return None
+    amt = m.group(1)
+    return f"${amt}"
+
+def extract_key_numbers_from_text(extracted_text: str) -> Dict[str, str]:
+    """
+    Extract key summary numbers from estimate text.
+    Only returns values that are explicitly labeled in the text.
+    Output keys are human-facing labels:
+      - Replacement Cost Value (RCV)
+      - Actual Cash Value (ACV)
+      - Depreciation
+      - Deductible
+      - Net Payment
+      - Overhead & Profit
+      - Sales Tax
+    """
+    if not extracted_text:
+        return {}
+
+    lines = [ln.strip() for ln in extracted_text.splitlines() if ln.strip()]
+    out: Dict[str, str] = {}
+
+    # label patterns (case-insensitive); we only capture if line also has a money token
+    patterns = [
+        (re.compile(r"\b(replacement cost value|rcv)\b", re.I), "Replacement Cost Value (RCV)"),
+        (re.compile(r"\b(actual cash value|acv)\b", re.I), "Actual Cash Value (ACV)"),
+        (re.compile(r"\bdepreciation\b", re.I), "Depreciation"),
+        (re.compile(r"\bdeductible\b", re.I), "Deductible"),
+        (re.compile(r"\bnet\b.*\b(payment|claim)\b|\btotal\b.*\bnet\b", re.I), "Net Payment"),
+        (re.compile(r"\b(overhead\s*&\s*profit|o\s*&\s*p|overhead and profit)\b", re.I), "Overhead & Profit"),
+        (re.compile(r"\b(sales\s*tax|tax)\b", re.I), "Sales Tax"),
+    ]
+
+    # We’ll take the LAST matching occurrence (often the most final summary)
+    for line in lines:
+        # quick skip: if no digits at all, it can't contain an amount
+        if not any(ch.isdigit() for ch in line):
+            continue
+
+        amt = _money_from_line(line)
+        if not amt:
+            continue
+
+        # ignore lines that are clearly not summary key numbers
+        # (you can expand this list if needed)
+        if re.search(r"\b(page|line item|subtotal by room|totals:)\b", line, re.I):
+            continue
+
+        for rx, label in patterns:
+            if rx.search(line):
+                out[label] = amt
+                break
+
+    return out
+
+
+
+def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_name: str) -> str:
+    if not key_numbers:
+        return ""
+
+    # consistent display order
+    order = [
+        "Replacement Cost Value (RCV)",
+        "Actual Cash Value (ACV)",
+        "Depreciation",
+        "Deductible",
+        "Overhead & Profit",
+        "Sales Tax",
+        "Net Payment",
+    ]
+
+    lines = []
+    for k in order:
+        if k in key_numbers:
+            lines.append(f"{k}: {key_numbers[k]}")
+
+    if not lines:
+        return ""
+
+    return (
+        "=== PROVIDED KEY NUMBERS (FROM ESTIMATE — DO NOT MODIFY) ===\n"
+        f"DOCUMENT: {doc_role.upper()} — {doc_name}\n"
+        + "\n".join(lines)
+        + "\n=========================================================="
+    )
+
+
+
 # ======================
 # Mini-Agent A: Estimate Explainer
 # ======================
@@ -799,10 +1046,35 @@ MATERIAL TOTALS (CRITICAL):
   - Include the exact computed total for each category if provided.
   - Describe what the category typically includes (removal, pad, labor, transitions, etc.).
   - Do NOT add, change, or adjust dollar amounts.
+  - Use human-read understandable labels for each material (no snake_underscore material labels)
 - If a material category is discussed but no computed total is provided:
   - Say "No computed total found for [material]".
   - Suggest a neutral follow-up question.
   - Do NOT estimate.
+
+ROOM TOTALS (CRITICAL):
+- You may be given a block labeled:
+  "PROVIDED ROOM TOTALS (FROM ESTIMATE — DO NOT MODIFY)".
+- These room totals are copied from explicit room total lines in the estimate
+  (e.g., lines labeled "Totals: [Room]").
+- If this block is present:
+  - Quote room totals EXACTLY as provided (same dollars and cents).
+  - NEVER compute, infer, or reconstruct room totals from the extracted estimate text.
+  - Only mention room totals that appear in this block.
+- If this block is NOT present:
+  - Do NOT list room totals.
+  - Do NOT guess or estimate room totals.
+  - You may optionally note that many estimates include a "Totals by Room/Area" summary page.
+- When discussing rooms:
+  - Only refer to actual rooms (Kitchen, Bathroom, Garage, Office, Stairs, etc.).
+  - Skip generic grouping labels such as "Main Level", "First Floor", "Second Floor", "Upper Level", and sketch labels like "SKETCH1".
+
+KEY NUMBERS (CRITICAL):
+- You may receive a block labeled:
+  "PROVIDED KEY NUMBERS (FROM ESTIMATE — DO NOT MODIFY)".
+- If present, treat these numbers as authoritative and quote them exactly.
+- Only state key numbers that appear in this block.
+- If the block is not present, say key numbers were not found and do not guess.
 
 FORMATTING (IMPORTANT):
 - Avoid using bold or italics around numeric amounts.
@@ -843,45 +1115,51 @@ OUTPUT STYLE (IMPORTANT):
 - Do NOT apply bold formatting to numeric amounts.
 - Use line breaks for readability.
 - Do NOT indent with dashes or symbols.
+- Do NOT output any HTML or XML tags (no <div>, <span>, <br>, etc.).
+- Do NOT use angle brackets < or > anywhere in the output.
 
 SPACING RULES:
 - After every bold section heading, insert exactly one blank line before the paragraph text.
 - Between major sections, insert exactly one blank line.
 - Do not put multiple blank lines in a row.
 
-INDENTATION RULE:
-- All paragraph text under a section heading must be indented by four spaces.
-- Section headings must remain unindented.
-- Do not indent blank lines.
+MATERIALS LISTING RULE (IMPORTANT):
+- When listing multiple materials, rooms, or categories with dollar amounts:
+  - Put EACH item on its own line.
+  - Do NOT combine multiple items on the same line.
+  - Use the format:
+    Category name: dollar amount
 
-EXAMPLE FORMAT:
+EXPLANATION LIST RULE (IMPORTANT):
+- When explaining what multiple categories or tasks typically represent:
+  - Put EACH category explanation on its own line.
+  - Start each line with the category name.
+  - Do NOT combine multiple categories into a single paragraph.
+  - Do NOT use bullets or numbering.
 
-**What’s Driving Cost in This Estimate**
-
-    The main cost areas in your estimate are grouped by material or type of work.
-    Each line below reflects an exact computed total.
-
-**What These Costs Typically Represent**
-
-    These categories group together related tasks and materials needed to complete the repairs.
 
 OUTPUT FORMAT (English):
-- Short introductory orientation
+- Short introductory orientation.
+  * Provide room totals, each room on a separate line.
 
 - "What’s Driving Cost in This Estimate"
-  * Major material categories
-  * Exact computed totals (if provided)
-  * Plain-English interpretation
-
-- "What These Costs Typically Represent"
-  * High-level scope explanations (no math)
+  * Start with a one-sentence opener like: "Here are the main tasks and materials driving your costs."
+  * List major material category in decending order by total cost.
+  * For each category:
+    * Start a new paragraph.
+    * Begin with: Material category Name: $Exact Amount
+    * For category name, use natural, homeowner-friendly labels with no underscores and Capitalized first letter.
+    * Follow with one sentence explaining what that category typically includes.
+  * Insert one blank line between categories.
+  * Do not combine categories into the same paragraph.
 
 - "Key Numbers From Your Estimate"
-  * Replacement Cost Value (RCV), if clearly present
-  * Deductible, if present
-  * Net payment, if present
-  * General Contractor Overhead & Profit, if present
-  * Material sales tax, if significant
+  * List each category from the Key numbers block on a separate line. Includes things like the following:
+    * Replacement Cost Value (RCV), if clearly present
+    * Deductible, if present
+    * Net payment, if present
+    * General Contractor Overhead & Profit, if present
+    * Material sales tax, if significant
 
 - If applicable: "Addressing Your Specific Questions"
 
@@ -1014,6 +1292,9 @@ def estimate_explainer_tab(preferred_lang: Dict):
             # Compute material totals for EACH uploaded document (Option A: show separately)
             material_results = []  # each: {"role","name","totals_ordered","result","totals_block"}
             totals_blocks = []
+            room_totals_blocks = []
+            key_numbers_blocks = []
+
 
             for d in docs:
                 if not d["text"].strip():
@@ -1056,6 +1337,20 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 atomic_time += timings.get("atomic_extraction_s", 0.0)
                 bucket_time += timings.get("bucketing_llm_s", 0.0)
 
+                # ROOM TOTALS
+                room_totals = extract_room_totals_from_text(d["text"])
+                if room_totals:
+                    room_block = build_room_totals_block(room_totals, doc_role=d["role"], doc_name=d["name"])
+                    if room_block:
+                        room_totals_blocks.append(room_block)
+
+                # KEY NUMBERS (summary-page figures like RCV, deductible, net payment)
+                key_numbers = extract_key_numbers_from_text(d["text"])
+                key_block = build_key_numbers_block(key_numbers, doc_role=d["role"], doc_name=d["name"])
+                if key_block:
+                    key_numbers_blocks.append(key_block)
+
+
             st.session_state["material_totals_by_doc"] = material_results
             totals_block = "\n\n".join(totals_blocks) if totals_blocks else ""
             st.session_state["material_totals_block"] = totals_block
@@ -1093,6 +1388,36 @@ CRITICAL RULE:
 - In the "Summary by Material" section, list the computed totals exactly as dollars and cents. Do not estimate or approximate.
 
 """
+                
+            # ---- ROOM TOTALS BLOCK (assemble after per-doc loop) ----
+            room_totals_block_all = "\n\n".join(room_totals_blocks).strip()
+            st.session_state["room_totals_block"] = room_totals_block_all
+
+            if room_totals_block_all:
+                user_content += f"""
+
+{room_totals_block_all}
+
+CRITICAL RULE:
+- These room totals were extracted from explicit "Totals: <Room>" lines in the estimate.
+- Do NOT recompute, modify, or infer any room totals.
+- Only mention room totals that appear in this block.
+"""
+            #---- SUMMARY NUMBERS BLOCK ----------------
+            key_numbers_block_all = "\n\n".join(key_numbers_blocks).strip()
+            st.session_state["key_numbers_block"] = key_numbers_block_all
+
+            if key_numbers_block_all:
+                user_content += f"""
+
+{key_numbers_block_all}
+
+CRITICAL RULE:
+- These key numbers were extracted from explicitly labeled summary lines in the estimate.
+- Do NOT recompute, modify, or infer any of these numbers.
+- Only mention key numbers that appear in this block.
+"""
+
 
             st.text_area(
                 "DEBUG: per-document material totals (structured)",
@@ -1137,6 +1462,7 @@ CRITICAL RULE:
             # Sanitize markdown for Streamlit rendering
             english_answer = sanitize_for_streamlit_markdown(english_answer)
 
+
             translated_answer = translate_if_needed(
                 english_answer, preferred_lang["code"]
             )
@@ -1161,27 +1487,60 @@ CRITICAL RULE:
                 height=150,
             )
 
+            # optional normalization (keeps plain text, just improves delimiter reliability)
+            st.session_state["estimate_explanation_en"] = (
+                st.session_state["estimate_explanation_en"]
+                .replace("\r\n", "\n")
+            )
+
 
     # Display explanation (outside button block)
-    if "estimate_explanation_en" in st.session_state and st.session_state["estimate_explanation_en"]:
-        st.markdown("### Explanation")
-        st.markdown(st.session_state["estimate_explanation_en"])
+    explanation = st.session_state.get("estimate_explanation_en", "")
 
+    if explanation.strip():
+        # Explanation
+        st.markdown("**Explanation**")
+        st.write("")
+
+        sections = split_by_bold_headings(explanation)
+
+        if not sections:
+            st.markdown(explanation)
+        else:
+            first = True
+            for heading, body in sections:
+                if not first:
+                    st.write("")  # space between blocks
+                first = False
+
+                title = "Overview"
+                if heading:
+                    title = heading.strip()
+                    if title.startswith("**") and title.endswith("**"):
+                        title = title[2:-2].strip()
+
+                st.markdown(f"**{title}**")
+
+                body_clean = body.strip()
+                if body_clean:
+                    st.markdown("> " + body_clean.replace("\n", "\n> "))
+
+        # Spanish Translation (only if present)
         if st.session_state.get("estimate_translated"):
             st.markdown("### Spanish Translation")
             st.markdown(st.session_state["estimate_translated"])
 
         # Export buttons
         col1, col2 = st.columns(2)
-        
+
         with col1:
             followups = st.session_state.get("estimate_followups", [])
             label = "Download PDF"
             if followups:
                 label += f" (includes {len(followups)} follow-up{'s' if len(followups) > 1 else ''})"
-            
+
             pdf_bytes = create_explanation_pdf(
-                st.session_state["estimate_explanation_en"],
+                explanation,  # use the local variable
                 "Estimate Explanation",
                 followups=followups
             )
@@ -1192,21 +1551,22 @@ CRITICAL RULE:
                 mime="application/pdf",
                 use_container_width=True
             )
-        
+
         with col2:
-            email_body = st.session_state['estimate_explanation_en']
+            email_body = explanation
             followups = st.session_state.get("estimate_followups", [])
             if followups:
                 email_body += "\n\n--- Follow-up Q&A ---\n\n"
                 for i, f in enumerate(followups, 1):
                     email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
-            
+
             mailto_link = f"mailto:?subject=My Estimate Explanation&body={urllib.parse.quote(email_body[:2000])}"
             if st.button("Email This", key="email_estimate_btn", use_container_width=True):
                 st.markdown(
                     f"<meta http-equiv='refresh' content='0; url={mailto_link}'>",
                     unsafe_allow_html=True,
                 )
+
 
     # Follow-up section
     if st.session_state.get("estimate_explanation_en"):
