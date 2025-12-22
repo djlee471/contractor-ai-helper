@@ -10,6 +10,7 @@ import base64
 from fpdf import FPDF
 import urllib.parse
 
+import time
 
 
 # ======================
@@ -32,8 +33,9 @@ st.set_page_config(
     layout="wide",
 )
 
-BUCKET_MODEL = "gpt-4o-mini"
-EXPLAIN_MODEL = "gpt-5"        # or whatever you use for narration
+#BUCKET_MODEL = "gpt-4o-mini"
+BUCKET_MODEL = "gpt-4.1-mini"
+EXPLAIN_MODEL = "gpt-4.1"        # or whatever you use for narration
 
 st.markdown("""
 <style>
@@ -308,6 +310,28 @@ header[data-testid="stHeader"] {
 footer {
     display: none !important;
 }
+            
+/* ===== FIX STREAMLIT MARKDOWN GREEN / CODE STYLING ===== */
+/* Neutralize inline code and code blocks so they render like normal text */
+
+code,
+pre,
+pre code,
+kbd,
+samp {
+    color: inherit !important;
+    background-color: transparent !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+}
+
+/* Ensure markdown containers don't introduce code coloring */
+[data-testid="stMarkdownContainer"] code {
+    color: inherit !important;
+    background-color: transparent !important;
+}
 """, unsafe_allow_html=True)
 
 
@@ -432,23 +456,22 @@ y en los consejos de su contratista o diseñador.
 # OpenAI helpers
 # ======================
 
-def call_gpt(system_prompt: str, user_content: str,
-             max_output_tokens: int = 800,
-             temperature: float = 0.4) -> str:
-    """
-    Call the OpenAI Responses API with:
-    - system_prompt as `instructions`
-    - user_content as `input` (string)
+DEFAULT_MODEL = "gpt-4.1-mini"
 
-    Uses a moderately small max_output_tokens to help stay within budget.
-    """
+def call_gpt(
+    system_prompt: str,
+    user_content: str,
+    model: str | None = None,
+    max_output_tokens: int = 800,
+    temperature: float | None = None,
+) -> str:
     response = client.responses.create(
-        model="gpt-4.1-mini",  # you can bump up if you want more power
+        model=model or DEFAULT_MODEL,
         instructions=system_prompt,
         input=user_content,
         max_output_tokens=max_output_tokens,
-        temperature=temperature,
-        store=False,  # do not store conversation server-side
+        store=False,
+        **({"temperature": temperature} if temperature is not None else {}),
     )
     return response.output_text
 
@@ -688,6 +711,26 @@ def format_totals_block(totals_ordered):
         + "\n==============================================="
     )
 
+def build_mini_atomic_sample_from_grouped(grouped: dict, totals_ordered, *, max_buckets: int = 6, lines_per_bucket: int = 3) -> str:
+    """
+    Build a small, representative sample of atomic numbered line items.
+    Uses grouped[bucket] = [MoneyLine] returned by compute_material_totals().
+    """
+    if not totals_ordered:
+        return "=== ATOMIC LINE SAMPLE (FOR CONTEXT ONLY) ===\n(none)\n==============================================="
+
+    top = totals_ordered[:max_buckets]  # already ordered in descending importance by your pipeline? if not, it's still fine.
+    out = ["=== ATOMIC LINE SAMPLE (FOR CONTEXT ONLY) ==="]
+    for bucket, _amt in top:
+        out.append(f"BUCKET: {bucket}")
+        lines = grouped.get(bucket, [])[:lines_per_bucket]
+        for ml in lines:
+            out.append(f"{ml.text}")
+        out.append("")  # blank line between buckets
+
+    out.append("===============================================")
+    return "\n".join(out).strip()
+
 
 # ======================
 # Mini-Agent A: Estimate Explainer
@@ -795,10 +838,32 @@ OUTPUT STYLE (IMPORTANT):
 - Section headings MUST be bolded using **double asterisks**.
 - Do NOT use Markdown headings (##, ###).
 - Do NOT use bullet characters such as "-", "*", or "•".
+- Do NOT use backticks (`) or fenced code blocks.
 - Do NOT italicize text.
 - Do NOT apply bold formatting to numeric amounts.
 - Use line breaks for readability.
-- Do not indent with dashes or symbols.
+- Do NOT indent with dashes or symbols.
+
+SPACING RULES:
+- After every bold section heading, insert exactly one blank line before the paragraph text.
+- Between major sections, insert exactly one blank line.
+- Do not put multiple blank lines in a row.
+
+INDENTATION RULE:
+- All paragraph text under a section heading must be indented by four spaces.
+- Section headings must remain unindented.
+- Do not indent blank lines.
+
+EXAMPLE FORMAT:
+
+**What’s Driving Cost in This Estimate**
+
+    The main cost areas in your estimate are grouped by material or type of work.
+    Each line below reflects an exact computed total.
+
+**What These Costs Typically Represent**
+
+    These categories group together related tasks and materials needed to complete the repairs.
 
 OUTPUT FORMAT (English):
 - Short introductory orientation
@@ -910,10 +975,30 @@ def estimate_explainer_tab(preferred_lang: Dict):
             docs = []  # list of {"role": "insurance"|"contractor", "name": str, "text": str}
             all_extracted_text = ""
 
+            #==============================
             # Extract from insurance files
+            #==============================
+
+
+            # ====================
+            # TIME DEBUG INIT
+            # ====================
+            pdf_time = 0.0
+            atomic_time = 0.0
+            bucket_time = 0.0
+            explain_time = 0.0
+
             for f in (insurance_files or []):
+                t0 = time.perf_counter() # time debug
                 packets = extract_pdf_pages_text(f.getvalue())
                 block = join_page_packets(packets)
+                t1 = time.perf_counter() # time debug
+
+                elapsed = t1 - t0 # time debug
+                pdf_time += elapsed # time debug
+
+                print(f"[TIMING] pdfplumber extraction ({f.name}): {elapsed:.2f}s") # time debug
+
 
                 docs.append({"role": "insurance", "name": f.name, "text": block})
                 all_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n{block}"
@@ -940,12 +1025,18 @@ def estimate_explainer_tab(preferred_lang: Dict):
                     extracted_text=d["text"],
                 )
 
-                # Build a labeled totals block so the explainer keeps insurance vs contractor separate
                 labeled_totals_block = (
                     "=== COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY) ===\n"
                     f"DOCUMENT: {d['role'].upper()} — {d['name']}\n"
-                    + "\n".join([f"- {bucket}: ${amount:,.2f}" for bucket, amount in result["totals_ordered"]])
+                    + "\n".join([f"{bucket}: ${amount:,.2f}" for bucket, amount in result["totals_ordered"]])
                     + "\n==============================================="
+                )
+
+                mini_sample = build_mini_atomic_sample_from_grouped(
+                    result["grouped"],
+                    result["totals_ordered"],
+                    max_buckets=6,
+                    lines_per_bucket=3,
                 )
 
                 material_results.append(
@@ -953,20 +1044,25 @@ def estimate_explainer_tab(preferred_lang: Dict):
                         "role": d["role"],
                         "name": d["name"],
                         "totals_ordered": result["totals_ordered"],
-                        "result": result,  # includes money_lines/bucket_map/grouped for debugging if needed
+                        "result": result,
                         "totals_block": labeled_totals_block,
+                        "mini_sample": mini_sample,
                     }
                 )
 
                 totals_blocks.append(labeled_totals_block)
 
-            # Store for follow-ups + UI
-            st.session_state["material_totals_by_doc"] = material_results
+                timings = result.get("timings", {})
+                atomic_time += timings.get("atomic_extraction_s", 0.0)
+                bucket_time += timings.get("bucketing_llm_s", 0.0)
 
-            # Single injection string (may include one or multiple labeled blocks)
+            st.session_state["material_totals_by_doc"] = material_results
             totals_block = "\n\n".join(totals_blocks) if totals_blocks else ""
             st.session_state["material_totals_block"] = totals_block
-            
+
+            mini_samples_block = "\n\n".join([mr["mini_sample"] for mr in material_results]) if material_results else ""
+            st.session_state["material_mini_samples_block"] = mini_samples_block
+
             # Build user content with extracted text
             user_content = f"""
 [USER CONTEXT]
@@ -983,11 +1079,9 @@ USER'S NOTES OR QUESTIONS (address these explicitly):
 """
             
             user_content += f"""
-EXTRACTED ESTIMATE TEXT (for context only — not for computing totals):
-
-{all_extracted_text}
+ATOMIC LINE ITEMS (small sample for context only — do NOT add these up):
+{mini_samples_block if mini_samples_block.strip() else "(no atomic sample available)"}
 """
-            
             if totals_block:
                 user_content += f"""
 
@@ -1018,14 +1112,24 @@ CRITICAL RULE:
                 height=250,
             )
 
+            # DEBUG 12/22
+            print("[DEBUG] FIRST PASS user_content chars:", len(user_content))
+            print("[DEBUG] all_extracted_text chars:", len(all_extracted_text))
+            print("[DEBUG] all_extracted_text included in first pass?", "EXTRACTED ESTIMATE TEXT" in user_content)
+
             # Call GPT with text (not PDF)
+            t0 = time.perf_counter()  # time debug
             system_prompt = build_estimate_system_prompt()
             english_answer = call_gpt(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_output_tokens=1100,
+                model = EXPLAIN_MODEL,
                 temperature=0.4,
+                max_output_tokens=1100,
             )
+
+            t1 = time.perf_counter()  # time debug
+            explain_time = t1 - t0    # time debug
 
             # Normalize unicode dashes
             english_answer = english_answer.replace("–", "-").replace("—", "-")
@@ -1041,6 +1145,22 @@ CRITICAL RULE:
             st.session_state["estimate_explanation_en"] = english_answer
             st.session_state["estimate_translated"] = translated_answer
             st.session_state["estimate_extra_notes"] = extra_notes
+
+
+            # =========================
+            # DEBUG OUTPUT (AFTER RUN)
+            # =========================
+            st.text_area(
+                "DEBUG: timing breakdown",
+                "\n".join([
+                    f"pdfplumber extraction: {pdf_time:.2f}s",
+                    f"atomic extraction: {atomic_time:.2f}s",
+                    f"bucketing LLM call: {bucket_time:.2f}s",
+                    f"explanation LLM call: {explain_time:.2f}s",
+                ]),
+                height=150,
+            )
+
 
     # Display explanation (outside button block)
     if "estimate_explanation_en" in st.session_state and st.session_state["estimate_explanation_en"]:
@@ -1181,8 +1301,9 @@ CRITICAL RULE:
                         follow_en = call_gpt(
                             system_prompt=follow_system,
                             user_content=follow_user_content,
+                            model=EXPLAIN_MODEL,
+                            temperature=0.3,
                             max_output_tokens=700,
-                            temperature=0.4,
                         )
 
                         # Normalize dashes
@@ -1374,7 +1495,7 @@ EXTRA NOTES:
             # -----end USER CONTENT-------#
 
             system_prompt = build_renovation_system_prompt()
-            english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
+            english_answer = call_gpt(system_prompt, user_content, model=EXPLAIN_MODEL, temperature=0.4, max_output_tokens=700)
             translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
 
             # NEW: Store for follow-ups
@@ -1489,7 +1610,7 @@ USER'S FOLLOW-UP QUESTION:
 {follow_q_reno}
 """.strip()
 
-                        follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
+                        follow_en = call_gpt(follow_system, follow_notes, model=EXPLAIN_MODEL, temperature=0.3, max_output_tokens=600)
                         follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
                     # Storage code - OUTSIDE spinner
@@ -1749,7 +1870,7 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
 """.strip()
 
             system_prompt = build_design_system_prompt()
-            english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
+            english_answer = call_gpt(system_prompt, user_content, model=EXPLAIN_MODEL, temperature=0.4, max_output_tokens=700)
             translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
 
 # NEW: Store for follow-ups
@@ -1869,7 +1990,7 @@ USER'S FOLLOW-UP QUESTION:
 {follow_q_design}
 """.strip()
 
-                        follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
+                        follow_en = call_gpt(follow_system, follow_notes, model=EXPLAIN_MODEL, temperature=0.3,max_output_tokens=600)
                         follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
                     # Storage code - OUTSIDE spinner
