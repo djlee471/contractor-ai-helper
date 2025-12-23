@@ -9,7 +9,7 @@ import base64
 # for exporting pdfs
 from fpdf import FPDF
 import urllib.parse
-
+import html
 import time
 
 
@@ -327,10 +327,20 @@ samp {
     border-radius: 0 !important;
 }
 
-/* Ensure markdown containers don't introduce code coloring */
-[data-testid="stMarkdownContainer"] code {
-    color: inherit !important;
-    background-color: transparent !important;
+/* ===== INDENTED SECTION BODY (replaces blockquote) ===== */
+.section-body {
+    border-left: 3px solid #E5E7EB;
+    padding-left: 1rem;
+    margin-left: 0.25rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1.25rem;
+    color: #0F172A;       /* black */
+    opacity: 1;
+}
+
+.section-body p {
+    margin: 0 0 0.75rem 0;
+    color: #0F172A;
 }
 """, unsafe_allow_html=True)
 
@@ -1233,8 +1243,17 @@ def estimate_explainer_tab(preferred_lang: Dict):
         if not insurance_files and not contractor_files:
             st.warning("Please upload at least one estimate (PDF).")
             return
+        
+        # STATUS UPDATE WHILE BUILDING EXPLANATION
+        status_box = st.empty()
+        progress_bar = st.progress(0)
 
-        with st.spinner("Reading your estimate PDFs and preparing an explanation..."):
+        def set_step(step_num, msg):
+            progress_bar.progress(step_num / 4)
+            status_box.markdown(f"**{msg}**")
+
+
+        with st.spinner("I'm working through your estimate now. This usually takes about 20–30 seconds."):
             # Store PDFs as bytes for follow-ups
             st.session_state["estimate_insurance_pdfs"] = [
                 {"name": f.name, "type": f.type, "bytes": f.getvalue()}
@@ -1273,6 +1292,8 @@ def estimate_explainer_tab(preferred_lang: Dict):
             # ====================
             # REUSE OR EXTRACT
             # ====================
+            set_step(1, "Reading your PDF…")
+
             if files_unchanged and already_extracted:
                 # Reuse cached extracted text; don't re-run pdfplumber
                 docs = st.session_state["estimate_extracted_docs"]
@@ -1327,6 +1348,8 @@ def estimate_explainer_tab(preferred_lang: Dict):
             # ====================
             # Compute material totals for EACH uploaded document (Option A: show separately)
             # ====================
+            set_step(2, "Organizing the numbers by category…")
+
             material_results = []  # each: {"role","name","totals_ordered","result","totals_block","mini_sample"}
             totals_blocks = []
             room_totals_blocks = []
@@ -1460,30 +1483,32 @@ CRITICAL RULE:
 """
 
 
-            st.text_area(
-                "DEBUG: per-document material totals (structured)",
-                str(st.session_state.get("material_totals_by_doc", [])),
-                height=200,
-            )
+            # st.text_area(
+            #     "DEBUG: per-document material totals (structured)",
+            #     str(st.session_state.get("material_totals_by_doc", [])),
+            #     height=200,
+            # )
 
-            st.text_area(
-                "DEBUG: totals_block being injected",
-                totals_block or "(EMPTY)",
-                height=200,
-            )
+            # st.text_area(
+            #     "DEBUG: totals_block being injected",
+            #     totals_block or "(EMPTY)",
+            #     height=200,
+            # )
 
-            st.text_area(
-                "DEBUG: tail of user_content",
-                user_content[-1500:],
-                height=250,
-            )
+            # st.text_area(
+            #     "DEBUG: tail of user_content",
+            #     user_content[-1500:],
+            #     height=250,
+            # )
 
-            # DEBUG 12/22
-            print("[DEBUG] FIRST PASS user_content chars:", len(user_content))
-            print("[DEBUG] all_extracted_text chars:", len(all_extracted_text))
-            print("[DEBUG] all_extracted_text included in first pass?", "EXTRACTED ESTIMATE TEXT" in user_content)
+            # # DEBUG 12/22
+            # print("[DEBUG] FIRST PASS user_content chars:", len(user_content))
+            # print("[DEBUG] all_extracted_text chars:", len(all_extracted_text))
+            # print("[DEBUG] all_extracted_text included in first pass?", "EXTRACTED ESTIMATE TEXT" in user_content)
 
             # Call GPT with text (not PDF)
+            set_step(3, "Putting together your explanation…")
+
             t0 = time.perf_counter()  # time debug
             system_prompt = build_estimate_system_prompt()
             english_answer = call_gpt(
@@ -1508,6 +1533,12 @@ CRITICAL RULE:
                 english_answer, preferred_lang["code"]
             )
 
+            set_step(4, "Done.")
+            time.sleep(0.2)  # optional: lets users see “Done.” briefly
+            progress_bar.empty()
+            status_box.empty()
+
+
             # Store explanation for follow-ups
             st.session_state["estimate_explanation_en"] = english_answer
             st.session_state["estimate_translated"] = translated_answer
@@ -1517,16 +1548,16 @@ CRITICAL RULE:
             # =========================
             # DEBUG OUTPUT (AFTER RUN)
             # =========================
-            st.text_area(
-                "DEBUG: timing breakdown",
-                "\n".join([
-                    f"pdfplumber extraction: {pdf_time:.2f}s",
-                    f"atomic extraction: {atomic_time:.2f}s",
-                    f"bucketing LLM call: {bucket_time:.2f}s",
-                    f"explanation LLM call: {explain_time:.2f}s",
-                ]),
-                height=150,
-            )
+            # st.text_area(
+            #     "DEBUG: timing breakdown",
+            #     "\n".join([
+            #         f"pdfplumber extraction: {pdf_time:.2f}s",
+            #         f"atomic extraction: {atomic_time:.2f}s",
+            #         f"bucketing LLM call: {bucket_time:.2f}s",
+            #         f"explanation LLM call: {explain_time:.2f}s",
+            #     ]),
+            #     height=150,
+            # )
 
             # optional normalization (keeps plain text, just improves delimiter reliability)
             st.session_state["estimate_explanation_en"] = (
@@ -1564,7 +1595,9 @@ CRITICAL RULE:
 
                 body_clean = body.strip()
                 if body_clean:
-                    st.markdown("> " + body_clean.replace("\n", "\n> "))
+                    safe = html.escape(body_clean).replace("\n", "<br>")
+                    st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
+
 
         # Spanish Translation (only if present)
         if st.session_state.get("estimate_translated"):
@@ -1746,7 +1779,7 @@ CRITICAL RULE:
 
 def build_renovation_system_prompt() -> str:
     return """
-You are a friendly and personable assistant that explains typical sequences for home repair projects.
+You are a friendly and personable assistant that explains typical sequences for home repair or renovation projects.
 
 HARD RULES:
 - You are NOT the user's contractor, engineer, or inspector.
@@ -1754,31 +1787,35 @@ HARD RULES:
 - If the user provides a sequence from their contractor, treat it as correct and primary.
   You may only explain it and suggest neutral questions they can ask.
 - When you describe a sequence, use words like "often", "typically", or "in many projects".
-  Always add that the user should follow their contractor's specific plan if it differs.
+  Always note that the user should follow their contractor's specific plan if it differs.
 
 GENERAL SEQUENCING PRINCIPLES (apply to all projects):
 - Construction generally proceeds from structure → mechanical/electrical → drywall and surfaces → flooring → trim → paint touch-ups → fixtures.
-- Do NOT place a step before something that depends on it. 
+- Do NOT place a step before something that depends on it.
   (Example: do not paint or caulk trim before trim is installed; do not install trim before flooring.)
 - Distinguish between early-stage painting (walls/ceiling after drywall) and final painting (trim and touch-ups after trim installation).
 - Flooring, regardless of type, typically goes in before baseboards or shoe molding.
-- If the user scenario is ambiguous, choose the most widely used sequence and clearly note that individual contractors may vary.
+- If the scenario is ambiguous, choose the most widely used sequence and clearly note that individual contractors may vary.
 - The homeowner may not list every step. If they mention major items (e.g., tile, carpet, drywall repair),
-  you may include standard related steps (such as underlayment, grout, baseboard reinstallation, and paint touch-ups),
-  but describe these as "typically" or "often" included rather than assuming they are definitely in the contractor's scope.
+  you may explain commonly related steps (such as underlayment, grout, baseboard reinstallation, and paint touch-ups),
+  but describe these as "typically" or "often" included rather than assuming they are definitely in scope.
 
 GOALS:
-1. Suggest a clear, typical order of operations based on the user inputs
-   (demo, subfloor repair, tile, grout, baseboards, paint, carpet, cabinets, countertops, etc.).
-2. Provide a short checklist of what the homeowner may need to prepare or decide before each step.
-3. Suggest polite questions they can ask their contractor to confirm details.
+1. Explain a clear, typical order of operations based on the user's inputs.
+2. Describe what the homeowner may need to prepare or decide at different stages of the project.
+3. Suggest polite, neutral questions the homeowner can ask their contractor to confirm details.
 
-OUTPUT FORMAT (English):
-- "Typical Sequence for Your Project"
-- "What You May Need to Prepare"
-- "Questions to Ask Your Contractor"
-- Short reminder at the end that this is general guidance only.
+OUTPUT FORMAT (IMPORTANT):
+- Use plain text paragraphs.
+- Section headings MUST be bolded using **double asterisks**.
+- Do NOT use Markdown headings (##, ###).
+- Do NOT use bullet characters such as "-", "*", or "•".
+- Do NOT format content as checklists.
+- Use line breaks between sections for readability.
+- Keep a calm, explanatory tone.
+- End with a short reminder that this is general guidance and the contractor's plan should take precedence.
 
+Write clearly and concisely.
 """.strip()
 
 
@@ -1875,6 +1912,70 @@ def renovation_plan_tab(preferred_lang: Dict):
     
         with st.spinner("Putting together a typical sequence..."):
 
+            estimate_docs = st.session_state.get("estimate_extracted_docs", [])
+            estimate_text_block = ""
+
+            if estimate_docs:
+                estimate_text_block = (
+                    "\n\nESTIMATE EXCERPT (FOR CONTEXT ONLY — DO NOT EXPAND SCOPE):\n"
+                    + "\n\n".join(
+                        [f"=== {d['role'].upper()} — {d['name']} ===\n{d['text']}" for d in estimate_docs]
+                    )
+                )
+
+            MAX_ESTIMATE_CHARS = 4000
+            if len(estimate_text_block) > MAX_ESTIMATE_CHARS:
+                estimate_text_block = (
+                    estimate_text_block[:MAX_ESTIMATE_CHARS]
+                    + "\n\n[...estimate excerpt truncated...]\n"
+                )
+
+            # Deterministic keyword set from user selections
+            room_terms = [r.strip().lower() for r in (rooms or []) if r and r.strip()]
+            if other_rooms:
+                room_terms += [w.strip().lower() for w in other_rooms.replace("\n", ",").split(",") if w.strip()]
+
+            work_terms = [w.strip().lower() for w in (work_types or []) if w and w.strip()]
+            if other_work:
+                work_terms += [w.strip().lower() for w in other_work.replace("\n", ",").split(",") if w.strip()]
+
+            # Filter lines that mention ANY room term OR ANY work term (broad on purpose for now)
+            filtered_chunks = []
+            for d in estimate_docs:
+                text = d.get("text", "") or ""
+                lines = text.splitlines()
+
+                kept = []
+                for line in lines:
+                    l = line.lower()
+                    if any(rt in l for rt in room_terms) or any(wt in l for wt in work_terms):
+                        kept.append(line)
+
+                if kept:
+                    filtered_chunks.append(
+                        f"=== {d['role'].upper()} — {d['name']} (FILTERED) ===\n" + "\n".join(kept)
+                    )
+
+            if filtered_chunks:
+                estimate_text_block = (
+                    "\n\nESTIMATE EXCERPT (FILTERED BY YOUR SELECTED ROOMS/WORK — CONTEXT ONLY):\n"
+                    + "\n\n".join(filtered_chunks)
+                )
+
+            # Hard cap after filtering
+            MAX_ESTIMATE_CHARS = 4000
+            if len(estimate_text_block) > MAX_ESTIMATE_CHARS:
+                estimate_text_block = (
+                    estimate_text_block[:MAX_ESTIMATE_CHARS]
+                    + "\n\n[...filtered estimate excerpt truncated...]\n"
+                )
+
+            print(
+                f"[RENOVATION FILTER] rooms={room_terms} work={work_terms} | "
+                f"estimate_text_chars={len(estimate_text_block)}"
+            )
+
+
 #==================================
 # -----USER CONTENT for prompt---#
 #===================================
@@ -1893,6 +1994,16 @@ CONTRACTOR'S SEQUENCE (if any, treat as primary):
 EXTRA NOTES:
 {extra_notes or 'None provided'}
 """.strip()
+
+            user_content = (user_content + estimate_text_block).strip()
+
+            print(
+                f"[RENOVATION PROMPT] "
+                f"user_content chars={len(user_content)} | "
+                f"estimate_docs={len(estimate_docs)} | "
+                f"estimate_text_chars={len(estimate_text_block)}"
+            )
+
             # -----end USER CONTENT-------#
 
             system_prompt = build_renovation_system_prompt()
@@ -1912,9 +2023,59 @@ EXTRA NOTES:
             }
 
     # MOVE display code HERE - outside button block
+
+    estimate_docs = st.session_state.get("estimate_extracted_docs", [])
+    has_estimate_text = bool(estimate_docs)
+
+    print(f"[RENOVATION] has_estimate_text={has_estimate_text}, docs={len(estimate_docs)}")
+
+
     if "renovation_explanation_en" in st.session_state and st.session_state["renovation_explanation_en"]:
         st.markdown("### Typical plan")
-        st.markdown(st.session_state["renovation_explanation_en"])
+        #st.markdown(st.session_state["renovation_explanation_en"])
+        # ==============================
+        # Renovation explanation display
+        # ==============================
+
+        renovation_text = st.session_state.get("renovation_explanation_en", "")
+
+        if renovation_text.strip():
+            sections = split_by_bold_headings(renovation_text)
+
+            if not sections:
+                # Fallback: render entire text inside styled container
+                import html
+                safe = html.escape(renovation_text).replace("\n", "<br>")
+                st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
+            else:
+                first = True
+                for heading, body in sections:
+                    if not first:
+                        st.write("")  # spacing between sections
+                    first = False
+
+                    title = "Overview"
+                    if heading:
+                        title = heading.strip()
+                        if title.startswith("**") and title.endswith("**"):
+                            title = title[2:-2].strip()
+
+                    st.markdown(f"**{title}**")
+
+                    body_clean = body.strip()
+                    if body_clean:
+                        safe = html.escape(body_clean).replace("\n", "<br>")
+                        st.markdown(
+                            f'<div class="section-body">{safe}</div>',
+                            unsafe_allow_html=True
+                        )
+
+        # Spanish translation (if present)
+        if st.session_state.get("renovation_translated"):
+            st.write("")
+            st.markdown("**Spanish Translation**")
+            st.markdown(st.session_state["renovation_translated"])
+
         
         if st.session_state.get("renovation_translated"):
             st.markdown("### Spanish Translation")
@@ -2056,8 +2217,7 @@ USER'S FOLLOW-UP QUESTION:
 
 def build_design_system_prompt() -> str:
     return """
-You are a general interior-design helper for homeowners selecting finishes
-and materials during repairs or remodeling.
+You are a general interior-design helper for homeowners selecting finishes and materials during repairs or remodeling.
 You must base all suggestions ONLY on the materials the user selected.
 
 ALLOWED MATERIAL CATEGORIES (examples, not exhaustive):
@@ -2076,32 +2236,46 @@ HARD RULES:
 2. Treat any design recommendations from the user's contractor or designer as primary.
 3. NEVER introduce materials the user did not choose.
 4. Keep suggestions practical, neutral, and easy to understand.
-5. Consider alternative design philosophies to ensure you give the user a balanced view.
-6. Emphasize that real-world lighting and samples matter more than AI suggestions.
+5. Consider at least one alternative design philosophy so the user gets a balanced view.
+6. Emphasize that real-world lighting and physical samples matter more than AI suggestions.
 
 GOALS:
-1. Use the room type, selected materials, wall color, adjacent finishes,
-   style preferences, contrast preferences, and usage (kids/pets/traffic)
-   to propose 2–3 clear and coherent "design directions."
-2. Discuss material-specific considerations, for example:
-   - If tile is selected → grout color, finish, pattern.
-   - If cabinets are selected → undertones, hardware finishes.
-   - If paint is selected → undertones, natural/artificial light.
-   - If countertops are selected → veining, movement, sheen.
-   - If multiple materials are selected → how they coordinate.
+1. Use the room type, selected materials, wall color, adjacent finishes, style preferences, contrast preferences,
+   and usage (kids/pets/traffic) to propose 2–3 clear and coherent design directions.
+2. Discuss material-specific considerations relevant to ONLY the user-selected materials.
+   For example:
+   - If tile is selected: grout color, finish, pattern/layout, sealing.
+   - If carpet is selected: pile/texture, padding, stain resistance, seam placement.
+   - If cabinets are selected: undertones, door style, hardware finishes.
+   - If paint is selected: undertones, natural/artificial light, sheen.
+   - If countertops are selected: movement/veining, edge profile, sheen.
+   - If multiple materials are selected: how they coordinate.
 3. Give practical notes about durability, maintenance, and color matching.
-4. Also discuss additional factors and decisions the user may need to consider that are often overlooked, such as tile layout, carpet padding, grout sealing, cabinet hardware styles, etc.
-4. Suggest polite, neutral questions the user can ask their contractor or designer.
+4. Mention a few commonly overlooked decisions that may apply to the user's selected materials (e.g., tile layout, carpet padding, grout sealing, hardware finishes).
+5. Suggest polite, neutral questions the user can ask their contractor or designer.
 
-OUTPUT FORMAT (English):
-- "Overall Design Direction"
-- "Option 1"
-- "Option 2"
-- (Option 3 if helpful)
-- "Material-Specific Notes"
-- "Practical Considerations"
-- "Questions to Ask Your Contractor or Designer"
-- Short reminder that this is general guidance only.
+OUTPUT FORMAT (IMPORTANT):
+- Use plain text paragraphs.
+- Section headings MUST be wrapped in **double asterisks**.
+   - If headings are not bolded, the output will be considered invalid
+- Use the exact section headings listed below, in this order.
+- Do NOT use Markdown headings (##, ###).
+- Do NOT use bullet characters such as "-", "*", or "•".
+- Do NOT format content as checklists.
+- Use line breaks between sections for readability.
+
+REQUIRED SECTION HEADINGS (use these exact headings):
+**Overall Design Direction**
+**Option 1**
+**Option 2**
+(Include **Option 3** only if truly helpful)
+**Material-Specific Notes**
+**Practical Considerations**
+**Questions to Ask Your Contractor or Designer**
+**Final Reminder**
+
+FINAL REMINDER CONTENT:
+End with a short reminder that this is general guidance only and that lighting/samples and the contractor/designer's guidance should take precedence.
 """.strip()
 
 
@@ -2291,13 +2465,54 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
 
 # MOVE display code HERE - outside button block
     if "design_explanation_en" in st.session_state and st.session_state["design_explanation_en"]:
-        st.markdown("### Suggestions")
-        st.markdown(st.session_state["design_explanation_en"])
-        
-        if st.session_state.get("design_translated"):
-            st.markdown("### Spanish Translation")
-            st.markdown(st.session_state["design_translated"])
-        
+        # ==============================
+        # Design explanation display (outside button block)
+        # ==============================
+
+        design_text = st.session_state.get("design_explanation_en", "")
+
+        if design_text.strip():
+            st.markdown("**Suggestions**")
+            st.write("")
+
+            sections = split_by_bold_headings(design_text)
+
+            if not sections:
+                safe = html.escape(design_text).replace("\n", "<br>")
+                st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
+            else:
+                first = True
+                for heading, body in sections:
+                    if not first:
+                        st.write("")  # spacing between sections
+                    first = False
+
+                    title = "Overview"
+                    if heading:
+                        title = heading.strip()
+                        if title.startswith("**") and title.endswith("**"):
+                            title = title[2:-2].strip()
+
+                    st.markdown(f"**{title}**")
+
+                    body_clean = body.strip()
+                    if body_clean:
+                        safe = html.escape(body_clean).replace("\n", "<br>")
+                        st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
+
+        # Spanish translation (only if present)
+        design_es = st.session_state.get("design_translated", "")
+        if design_es:
+            st.write("")
+            st.markdown("**Spanish Translation**")
+            safe_es = html.escape(design_es).replace("\n", "<br>")
+            st.markdown(f'<div class="section-body">{safe_es}</div>', unsafe_allow_html=True)
+
+        # Export buttons (only show if we have content)
+        if design_text.strip() or design_es:
+            col1, col2 = st.columns(2)
+
+
         # Export buttons
         col1, col2 = st.columns(2)
         
