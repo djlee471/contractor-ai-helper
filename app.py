@@ -1250,13 +1250,17 @@ def estimate_explainer_tab(preferred_lang: Dict):
             from estimate_extract import extract_pdf_pages_text, join_page_packets
             from material_totals import compute_material_totals
 
-            docs = []  # list of {"role": "insurance"|"contractor", "name": str, "text": str}
-            all_extracted_text = ""
+            # ====================
+            # FILE SIGNATURE (for caching)
+            # ====================
+            current_files_sig = sorted(
+                [(f.name, len(f.getvalue())) for f in (insurance_files or [])] +
+                [(f.name, len(f.getvalue())) for f in (contractor_files or [])]
+            )
 
-            #==============================
-            # Extract from insurance files
-            #==============================
-
+            prev_files_sig = st.session_state.get("estimate_uploaded_file_sig")
+            already_extracted = bool(st.session_state.get("estimate_extracted_docs"))
+            files_unchanged = (prev_files_sig == current_files_sig)
 
             # ====================
             # TIME DEBUG INIT
@@ -1266,35 +1270,67 @@ def estimate_explainer_tab(preferred_lang: Dict):
             bucket_time = 0.0
             explain_time = 0.0
 
-            for f in (insurance_files or []):
-                t0 = time.perf_counter() # time debug
-                packets = extract_pdf_pages_text(f.getvalue())
-                block = join_page_packets(packets)
-                t1 = time.perf_counter() # time debug
+            # ====================
+            # REUSE OR EXTRACT
+            # ====================
+            if files_unchanged and already_extracted:
+                # Reuse cached extracted text; don't re-run pdfplumber
+                docs = st.session_state["estimate_extracted_docs"]
+                all_extracted_text = st.session_state.get("estimate_all_extracted_text", "")
+                print("[CACHE] Reusing cached extracted text (no pdfplumber run).")
+            else:
+                # Files changed (or no cache yet) → extract again
+                st.session_state["estimate_uploaded_file_sig"] = current_files_sig
 
-                elapsed = t1 - t0 # time debug
-                pdf_time += elapsed # time debug
+                docs = []  # list of {"role": "insurance"|"contractor", "name": str, "text": str}
+                all_extracted_text = ""
 
-                print(f"[TIMING] pdfplumber extraction ({f.name}): {elapsed:.2f}s") # time debug
+                # ==============================
+                # Extract from insurance files
+                # ==============================
+                for f in (insurance_files or []):
+                    t0 = time.perf_counter()
+                    packets = extract_pdf_pages_text(f.getvalue())
+                    block = join_page_packets(packets)
+                    t1 = time.perf_counter()
 
+                    elapsed = t1 - t0
+                    pdf_time += elapsed
+                    print(f"[TIMING] pdfplumber extraction ({f.name}): {elapsed:.2f}s")
 
-                docs.append({"role": "insurance", "name": f.name, "text": block})
-                all_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n{block}"
+                    docs.append({"role": "insurance", "name": f.name, "text": block})
+                    all_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n{block}"
 
-            # Extract from contractor files
-            for f in (contractor_files or []):
-                packets = extract_pdf_pages_text(f.getvalue())
-                block = join_page_packets(packets)
+                # ==============================
+                # Extract from contractor files
+                # ==============================
+                for f in (contractor_files or []):
+                    t0 = time.perf_counter()
+                    packets = extract_pdf_pages_text(f.getvalue())
+                    block = join_page_packets(packets)
+                    t1 = time.perf_counter()
 
-                docs.append({"role": "contractor", "name": f.name, "text": block})
-                all_extracted_text += f"\n\n=== CONTRACTOR ESTIMATE: {f.name} ===\n\n{block}"
+                    elapsed = t1 - t0
+                    pdf_time += elapsed
+                    print(f"[TIMING] pdfplumber extraction ({f.name}): {elapsed:.2f}s")
 
+                    docs.append({"role": "contractor", "name": f.name, "text": block})
+                    all_extracted_text += f"\n\n=== CONTRACTOR ESTIMATE: {f.name} ===\n\n{block}"
+
+                # Cache extracted text for downstream tabs (e.g., Renovation)
+                st.session_state["estimate_extracted_docs"] = [
+                    {"role": d["role"], "name": d["name"], "text": d["text"]}
+                    for d in docs
+                ]
+                st.session_state["estimate_all_extracted_text"] = all_extracted_text
+
+            # ====================
             # Compute material totals for EACH uploaded document (Option A: show separately)
-            material_results = []  # each: {"role","name","totals_ordered","result","totals_block"}
+            # ====================
+            material_results = []  # each: {"role","name","totals_ordered","result","totals_block","mini_sample"}
             totals_blocks = []
             room_totals_blocks = []
             key_numbers_blocks = []
-
 
             for d in docs:
                 if not d["text"].strip():
@@ -1350,13 +1386,18 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 if key_block:
                     key_numbers_blocks.append(key_block)
 
-
+            # Persist results for other tabs / follow-ups
             st.session_state["material_totals_by_doc"] = material_results
             totals_block = "\n\n".join(totals_blocks) if totals_blocks else ""
             st.session_state["material_totals_block"] = totals_block
 
             mini_samples_block = "\n\n".join([mr["mini_sample"] for mr in material_results]) if material_results else ""
             st.session_state["material_mini_samples_block"] = mini_samples_block
+
+            # Optional: store these if you use them elsewhere
+            st.session_state["room_totals_blocks"] = room_totals_blocks
+            st.session_state["key_numbers_blocks"] = key_numbers_blocks
+
 
             # Build user content with extracted text
             user_content = f"""
@@ -2042,14 +2083,14 @@ GOALS:
 1. Use the room type, selected materials, wall color, adjacent finishes,
    style preferences, contrast preferences, and usage (kids/pets/traffic)
    to propose 2–3 clear and coherent "design directions."
-2. Discuss material-specific considerations:
+2. Discuss material-specific considerations, for example:
    - If tile is selected → grout color, finish, pattern.
    - If cabinets are selected → undertones, hardware finishes.
    - If paint is selected → undertones, natural/artificial light.
    - If countertops are selected → veining, movement, sheen.
    - If multiple materials are selected → how they coordinate.
 3. Give practical notes about durability, maintenance, and color matching.
-4. Also discuss additional factors and decisions the user may need to consider, such as tile layout, carpet padding, grout sealing, cabinet hardware styles, etc.
+4. Also discuss additional factors and decisions the user may need to consider that are often overlooked, such as tile layout, carpet padding, grout sealing, cabinet hardware styles, etc.
 4. Suggest polite, neutral questions the user can ask their contractor or designer.
 
 OUTPUT FORMAT (English):
