@@ -1222,9 +1222,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
 
     extra_notes = st.text_area(
         "Any specific questions about this estimate? (Optional)",
-        help="For example: 'Why is demolition so expensive?' or 'What's included in the carpet cost?'",
-        placeholder="Example: How much of the carpet cost is for materials vs labor?"
-    )
+        help="For example: 'Why is demolition so expensive?' or 'What's included in the carpet cost?'")
 
     if st.button("Explain my estimate"):
         # Validation
