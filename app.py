@@ -2042,7 +2042,6 @@ EXTRA NOTES:
 
             if not sections:
                 # Fallback: render entire text inside styled container
-                import html
                 safe = html.escape(renovation_text).replace("\n", "<br>")
                 st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
             else:
