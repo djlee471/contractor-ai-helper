@@ -9,8 +9,7 @@ import base64
 # for exporting pdfs
 from fpdf import FPDF
 import urllib.parse
-import html
-import time
+
 
 
 # ======================
@@ -33,9 +32,6 @@ st.set_page_config(
     layout="wide",
 )
 
-#BUCKET_MODEL = "gpt-4o-mini"
-BUCKET_MODEL = "gpt-4.1-mini"
-EXPLAIN_MODEL = "gpt-4.1"        # or whatever you use for narration
 
 st.markdown("""
 <style>
@@ -269,78 +265,6 @@ select:hover {
     padding: 0 !important;
 }
             
-/* ================================
-   Make inputs more noticeable
-   ================================ */
-
-/* Target Streamlit/BaseWeb inputs */
-[data-testid="stTextInput"] input,
-[data-testid="stTextArea"] textarea,
-[data-testid="stNumberInput"] input,
-[data-testid="stDateInput"] input,
-[data-testid="stTimeInput"] input {
-    background-color: #FFFFFF !important;
-    border: 1px solid #CBD5E1 !important;   /* stronger default border */
-    border-radius: 0.55rem !important;
-    padding: 0.55rem 0.75rem !important;
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important; /* subtle lift */
-}
-
-/* Select / multiselect containers (BaseWeb) */
-[data-testid="stSelectbox"] [data-baseweb="select"] > div,
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
-    background-color: #FFFFFF !important;
-    border: 1px solid #CBD5E1 !important;
-    border-radius: 0.55rem !important;
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important;
-}
-
-/* File uploader container */
-[data-testid="stFileUploader"] section {
-    background-color: #FFFFFF !important;
-    border: 1px solid #CBD5E1 !important;
-    border-radius: 0.55rem !important;
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important;
-}
-
-/* Hover: slightly more obvious than before */
-[data-testid="stTextInput"] input:hover,
-[data-testid="stTextArea"] textarea:hover,
-[data-testid="stNumberInput"] input:hover,
-[data-testid="stDateInput"] input:hover,
-[data-testid="stTimeInput"] input:hover,
-[data-testid="stSelectbox"] [data-baseweb="select"] > div:hover,
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div:hover,
-[data-testid="stFileUploader"] section:hover {
-    border-color: #94A3B8 !important;
-    background-color: #F8FAFC !important;
-}
-
-/* Focus ring (click + keyboard) */
-[data-testid="stTextInput"] input:focus,
-[data-testid="stTextArea"] textarea:focus,
-[data-testid="stNumberInput"] input:focus,
-[data-testid="stDateInput"] input:focus,
-[data-testid="stTimeInput"] input:focus {
-    outline: none !important;
-    border-color: #420741 !important;
-    box-shadow: 0 0 0 3px rgba(66, 7, 65, 0.18) !important;
-}
-
-/* BaseWeb focus states for select/multiselect */
-[data-testid="stSelectbox"] [data-baseweb="select"] > div:focus-within,
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div:focus-within {
-    border-color: #420741 !important;
-    box-shadow: 0 0 0 3px rgba(66, 7, 65, 0.18) !important;
-}
-
-/* Placeholder contrast (often too faint) */
-[data-testid="stTextInput"] input::placeholder,
-[data-testid="stTextArea"] textarea::placeholder {
-    color: #94A3B8 !important;
-    opacity: 1 !important;
-}
-            
 /* ===== TAB NAVIGATION STYLING ===== */
 /* Active tab - purple color */
 .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
@@ -381,38 +305,6 @@ header[data-testid="stHeader"] {
 /* Hide footer (but won't hide the Streamlit badge on free tier) */
 footer {
     display: none !important;
-}
-            
-/* ===== FIX STREAMLIT MARKDOWN GREEN / CODE STYLING ===== */
-/* Neutralize inline code and code blocks so they render like normal text */
-
-code,
-pre,
-pre code,
-kbd,
-samp {
-    color: inherit !important;
-    background-color: transparent !important;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
-}
-
-/* ===== INDENTED SECTION BODY (replaces blockquote) ===== */
-.section-body {
-    border-left: 3px solid #E5E7EB;
-    padding-left: 1rem;
-    margin-left: 0.25rem;
-    margin-top: 0.5rem;
-    margin-bottom: 1.25rem;
-    color: #0F172A;       /* black */
-    opacity: 1;
-}
-
-.section-body p {
-    margin: 0 0 0.75rem 0;
-    color: #0F172A;
 }
 """, unsafe_allow_html=True)
 
@@ -538,22 +430,23 @@ y en los consejos de su contratista o diseñador.
 # OpenAI helpers
 # ======================
 
-DEFAULT_MODEL = "gpt-4.1-mini"
+def call_gpt(system_prompt: str, user_content: str,
+             max_output_tokens: int = 800,
+             temperature: float = 0.4) -> str:
+    """
+    Call the OpenAI Responses API with:
+    - system_prompt as `instructions`
+    - user_content as `input` (string)
 
-def call_gpt(
-    system_prompt: str,
-    user_content: str,
-    model: str | None = None,
-    max_output_tokens: int = 800,
-    temperature: float | None = None,
-) -> str:
+    Uses a moderately small max_output_tokens to help stay within budget.
+    """
     response = client.responses.create(
-        model=model or DEFAULT_MODEL,
+        model="gpt-4.1-mini",  # you can bump up if you want more power
         instructions=system_prompt,
         input=user_content,
         max_output_tokens=max_output_tokens,
-        store=False,
-        **({"temperature": temperature} if temperature is not None else {}),
+        temperature=temperature,
+        store=False,  # do not store conversation server-side
     )
     return response.output_text
 
@@ -587,7 +480,6 @@ Translate the following text from English to neutral, clear Spanish.
     return translated.output_text
 
 
-# DEPRECATED: No longer used - switched to pdfplumber text extraction
 def build_estimate_pdf_content(
     insurance_files: List, contractor_files: List, extra_notes: str
 ) -> List[Dict]:
@@ -644,7 +536,7 @@ instructions in the system prompt.
 
     return content
 
-# DEPRECATED: No longer used - switched to pdfplumber text extraction  
+
 def call_gpt_estimate_with_pdfs(
     system_prompt: str,
     insurance_files: List,
@@ -742,325 +634,6 @@ def create_explanation_pdf(content, title, followups=None):
     pdf.multi_cell(0, 5, "This is general educational information only. Always consult your insurance adjuster and contractor for final decisions.")
     
     return pdf.output(dest='S').encode('latin-1')
-
-#======================
-# FIX MARKDOWN ISSUES
-#========================
-
-import re
-
-def sanitize_for_streamlit_markdown(md: str) -> str:
-    """
-    Reduce Streamlit markdown rendering quirks:
-    - remove inline arithmetic in parentheses (contains + or =)
-    - avoid bolding currency amounts (**$1,234**)
-    - optionally normalize unicode dashes already handled elsewhere
-    """
-    if not md:
-        return md
-
-    # 1) Drop parenthetical "math-y" fragments: (A 409 + B 100) or (x = y)
-    md = re.sub(r"\(([^)]*[\+=][^)]*)\)", "", md)
-
-    # 2) Unbold currency/amounts: **$1,234.56** -> $1,234.56
-    md = re.sub(r"\*\*(\s*\$?\d[\d,]*(?:\.\d{1,2})?)\s*\*\*", r"\1", md)
-
-    # 3) Clean double spaces left behind
-    md = re.sub(r"[ \t]{2,}", " ", md)
-
-    return md.strip()
-
-#================
-# PYTHON MATERIALS CALCULATIONS
-#==================
-
-def format_totals_block(totals_ordered):
-    """
-    Formats Python-computed bucket totals for injection into the explainer prompt.
-    This is PRESENTATION only — no math.
-    """
-    if not totals_ordered:
-        return "Computed material totals: (none found)"
-
-    lines = [
-        f"- {bucket}: ${amount:,.2f}"
-        for bucket, amount in totals_ordered
-    ]
-
-    return (
-        "=== COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY) ===\n"
-        + "\n".join(lines)
-        + "\n==============================================="
-    )
-
-def build_mini_atomic_sample_from_grouped(grouped: dict, totals_ordered, *, max_buckets: int = 6, lines_per_bucket: int = 3) -> str:
-    """
-    Build a small, representative sample of atomic numbered line items.
-    Uses grouped[bucket] = [MoneyLine] returned by compute_material_totals().
-    """
-    if not totals_ordered:
-        return "=== ATOMIC LINE SAMPLE (FOR CONTEXT ONLY) ===\n(none)\n==============================================="
-
-    top = totals_ordered[:max_buckets]  # already ordered in descending importance by your pipeline? if not, it's still fine.
-    out = ["=== ATOMIC LINE SAMPLE (FOR CONTEXT ONLY) ==="]
-    for bucket, _amt in top:
-        out.append(f"BUCKET: {bucket}")
-        lines = grouped.get(bucket, [])[:lines_per_bucket]
-        for ml in lines:
-            out.append(f"{ml.text}")
-        out.append("")  # blank line between buckets
-
-    out.append("===============================================")
-    return "\n".join(out).strip()
-
-
-#========================================
-# FORMATTING ESTIMATE EXPLANATION
-#========================================
-import re
-from typing import List, Tuple, Optional
-
-BOLD_HEADING_LINE_RE = re.compile(r"^\*\*[^*\n]+\*\*$")
-
-def split_by_bold_headings(text: str) -> List[Tuple[Optional[str], str]]:
-    """
-    Splits plain-text explanation into sections delimited by bold-only heading lines.
-    Returns list of (heading_line_or_None, body_text).
-
-    - heading is the literal **Heading** line (including **), or None for intro.
-    - intro text (before first heading) becomes (None, intro_body).
-    """
-    if not text:
-        return []
-
-    lines = text.splitlines()
-    sections: List[Tuple[Optional[str], List[str]]] = []
-    current_heading: Optional[str] = None
-    current_body: List[str] = []
-
-    def flush():
-        nonlocal current_heading, current_body
-        body = "\n".join(current_body).strip("\n")
-        # Keep even empty bodies if a heading exists; skip fully empty intro
-        if current_heading is not None or body.strip():
-            sections.append((current_heading, body))
-        current_heading = None
-        current_body = []
-
-    seen_first_heading = False
-    for line in lines:
-        if BOLD_HEADING_LINE_RE.match(line.strip()):
-            if not seen_first_heading:
-                # everything accumulated so far is the intro -> Overview
-                flush()
-                seen_first_heading = True
-            else:
-                flush()
-            current_heading = line.strip()
-        else:
-            current_body.append(line)
-
-    flush()
-
-    # If the very first section ended up as (None, "") (e.g., text starts with heading), drop it
-    if sections and sections[0][0] is None and not sections[0][1].strip():
-        sections = sections[1:]
-
-    # If there was intro text but no headings at all, it will be (None, full_text)
-    return sections
-
-#===========================
-# ROOM TOTALS (EXPLICIT FROM PDF)
-#============================
-
-import re
-from typing import Dict, Tuple
-
-ROOM_TOTAL_LINE_RE = re.compile(r"^\s*Totals:\s*(.+?)\s+(.*)$")
-MONEY_RE = re.compile(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+(?:\.\d{2}))")
-
-# things that show up as "Totals:" but are NOT rooms
-NON_ROOM_TOTAL_LABELS = {
-    "Labor Minimums Applied",
-    "Line Item Totals",
-    "Recap of Taxes, Overhead and Profit",
-}
-
-# floor/sketch groupings (extra guard even though we ignore Area Totals already)
-NON_ROOM_NAME_EXACT = {
-    "Main Level",
-    "First Floor",
-    "Second Floor",
-    "Upper Level",
-    "Lower Level",
-    "Labor",
-}
-NON_ROOM_PREFIXES = ("SKETCH",)
-
-def extract_room_totals_from_text(extracted_text: str) -> Dict[str, str]:
-    """
-    Extract explicitly-provided room totals from estimate text.
-
-    Returns: {room_name: "$1,234.56"}  (keeps original comma formatting)
-    Only trusts lines that start with "Totals:" and have a clear final numeric total.
-    """
-    if not extracted_text:
-        return {}
-
-    out: Dict[str, str] = {}
-
-    for raw_line in extracted_text.splitlines():
-        line = raw_line.strip()
-        if not line.startswith("Totals:"):
-            continue
-
-        m = ROOM_TOTAL_LINE_RE.match(line)
-        if not m:
-            continue
-
-        room = m.group(1).strip()
-
-        # Reject known non-room labels
-        if room in NON_ROOM_TOTAL_LABELS:
-            continue
-
-        # Reject floor/group labels if they ever appear under Totals:
-        if room in NON_ROOM_NAME_EXACT:
-            continue
-        if any(room.upper().startswith(pfx) for pfx in NON_ROOM_PREFIXES):
-            continue
-
-        # Find numeric tokens on the rest of the line; use the LAST one as the total.
-        rest = m.group(2)
-        nums = MONEY_RE.findall(rest)
-        if not nums:
-            continue
-
-        total_str = nums[-1]  # last number on the line is the total in your PDF
-        # Ensure it looks like dollars+ cents OR at least a plausible number; keep as displayed.
-        # If you want strict cents: require '.' in total_str and len after dot == 2.
-
-        # Re-add "$" for display consistency (your text sometimes omits $)
-        out[room] = f"${total_str}"
-
-    return out
-
-def build_room_totals_block(room_totals: dict, *, doc_role: str, doc_name: str) -> str:
-    # Return empty string if nothing found
-    if not room_totals:
-        return ""
-
-    lines = [f"{room}: {amt}" for room, amt in sorted(room_totals.items(), key=lambda x: x[0].lower())]
-    if not lines:
-        return ""
-
-    return (
-        "=== PROVIDED ROOM TOTALS (FROM ESTIMATE — DO NOT MODIFY) ===\n"
-        f"DOCUMENT: {doc_role.upper()} — {doc_name}\n"
-        + "\n".join(lines)
-        + "\n=========================================================="
-    )
-
-#========================
-# SUMMARY NUMBERS FROM ESTIMATE PDF
-#=======================
-
-_MONEY_RE = re.compile(r"\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+(?:\.\d{2}))")
-
-def _money_from_line(line: str) -> Optional[str]:
-    """Return the first money-like token in the line as a display string with $."""
-    m = _MONEY_RE.search(line)
-    if not m:
-        return None
-    amt = m.group(1)
-    return f"${amt}"
-
-def extract_key_numbers_from_text(extracted_text: str) -> Dict[str, str]:
-    """
-    Extract key summary numbers from estimate text.
-    Only returns values that are explicitly labeled in the text.
-    Output keys are human-facing labels:
-      - Replacement Cost Value (RCV)
-      - Actual Cash Value (ACV)
-      - Depreciation
-      - Deductible
-      - Net Payment
-      - Overhead & Profit
-      - Sales Tax
-    """
-    if not extracted_text:
-        return {}
-
-    lines = [ln.strip() for ln in extracted_text.splitlines() if ln.strip()]
-    out: Dict[str, str] = {}
-
-    # label patterns (case-insensitive); we only capture if line also has a money token
-    patterns = [
-        (re.compile(r"\b(replacement cost value|rcv)\b", re.I), "Replacement Cost Value (RCV)"),
-        (re.compile(r"\b(actual cash value|acv)\b", re.I), "Actual Cash Value (ACV)"),
-        (re.compile(r"\bdepreciation\b", re.I), "Depreciation"),
-        (re.compile(r"\bdeductible\b", re.I), "Deductible"),
-        (re.compile(r"\bnet\b.*\b(payment|claim)\b|\btotal\b.*\bnet\b", re.I), "Net Payment"),
-        (re.compile(r"\b(overhead\s*&\s*profit|o\s*&\s*p|overhead and profit)\b", re.I), "Overhead & Profit"),
-        (re.compile(r"\b(sales\s*tax|tax)\b", re.I), "Sales Tax"),
-    ]
-
-    # We’ll take the LAST matching occurrence (often the most final summary)
-    for line in lines:
-        # quick skip: if no digits at all, it can't contain an amount
-        if not any(ch.isdigit() for ch in line):
-            continue
-
-        amt = _money_from_line(line)
-        if not amt:
-            continue
-
-        # ignore lines that are clearly not summary key numbers
-        # (you can expand this list if needed)
-        if re.search(r"\b(page|line item|subtotal by room|totals:)\b", line, re.I):
-            continue
-
-        for rx, label in patterns:
-            if rx.search(line):
-                out[label] = amt
-                break
-
-    return out
-
-
-
-def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_name: str) -> str:
-    if not key_numbers:
-        return ""
-
-    # consistent display order
-    order = [
-        "Replacement Cost Value (RCV)",
-        "Actual Cash Value (ACV)",
-        "Depreciation",
-        "Deductible",
-        "Overhead & Profit",
-        "Sales Tax",
-        "Net Payment",
-    ]
-
-    lines = []
-    for k in order:
-        if k in key_numbers:
-            lines.append(f"{k}: {key_numbers[k]}")
-
-    if not lines:
-        return ""
-
-    return (
-        "=== PROVIDED KEY NUMBERS (FROM ESTIMATE — DO NOT MODIFY) ===\n"
-        f"DOCUMENT: {doc_role.upper()} — {doc_name}\n"
-        + "\n".join(lines)
-        + "\n=========================================================="
-    )
-
-
-
 # ======================
 # Mini-Agent A: Estimate Explainer
 # ======================
@@ -1070,188 +643,116 @@ def build_estimate_system_prompt() -> str:
 You are an assistant that explains home insurance and construction estimates
 for homeowners in simple, friendly English.
 
-YOUR ROLE (IMPORTANT):
-- You explain scope, meaning, and structure.
-- You provide big-picture interpretation and context.
-- You do NOT perform arithmetic or calculate totals.
-- If computed totals are provided, you must treat them as ground truth.
-
-SOURCE OF TRUTH (CRITICAL):
-- You may receive a block labeled:
-  "COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY)".
-- These numbers are produced by deterministic Python code that sums
-  atomic, numbered line items (e.g., lines starting with "1.", "2.", etc.).
-- For material totals, ONLY use the numbers from this computed totals block.
-- Do NOT attempt to find, reconstruct, infer, or recompute material totals
-  from the extracted PDF text, even if the PDF contains summary or "Totals" lines.
-- The extracted PDF text is provided for context and examples only.
-
 DOCUMENT READING:
-- You may receive raw text from an insurance estimate, a contractor estimate, or both.
-- The text may be messy or lack table formatting.
-- You should still try to extract useful contextual information.
-- When helpful, you may refer to:
+- You will receive raw text from an insurance estimate, a contractor estimate, or both.
+- The text may be messy or lack table formatting. You MUST still try to read it and extract useful information.
+- Look for, and when helpful refer to:
   - Line item descriptions
   - Quantities (e.g. SF, LF, EA)
   - Unit prices (e.g. $/sq ft)
+  - Line totals
   - Subtotals, taxes, depreciation
   - Overhead & profit (O&P)
   - Deductible and net payment amounts
-- ONLY say that the text is unreadable if it is truly empty or clearly not an estimate.
-- Do NOT say things like "the text you provided is not in a readable format"
-  if any real estimate text is present.
+- ONLY say that the text is unreadable if it is truly empty or clearly not an estimate at all.
+- Do NOT say things like "the text you provided is not in a readable format" if any real text is present. In that case, always do your best to extract key numbers, even if formatting is imperfect.
 
 GENERAL BEHAVIOR:
-- Focus on high-level interpretation, not exhaustive line-item detail.
-- Help the homeowner understand what is driving cost and scope.
-- You may mention rooms or areas where work occurs (Garage, Loft, Kitchen, Laundry, Office, Stairs, etc.).
-- CRITICAL: Skip generic grouping labels such as:
-  "Main Level", "First Floor", "Second Floor", "Upper Level".
-  * These are NOT rooms.
-  * Only mention actual rooms (Kitchen, Bedroom, Garage, etc.).
-- Do NOT invent room totals.
-- Only state a room total if it is clearly shown as a provided total in the estimate.
+- Explain what the estimate is doing in plain English, grouped by room/area when possible.
+- Identify key decisions the homeowner needs to make (materials, areas, scope choices).
+- When the user asks about price points, allowances, or overages, you may:
+  - Point out what unit prices or allowances the estimate appears to use for materials like tile, carpet, baseboards, etc.
+  - Explain in plain language how choosing more expensive materials could create out-of-pocket costs.
+  - Suggest specific questions they can ask their adjuster or contractor about these numbers.
 
-MATERIAL TOTALS (CRITICAL):
-- You may be given a block labeled:
-  "COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY)".
-- If present, these totals are authoritative and exact.
-- When computed totals are provided:
-  - Quote them EXACTLY (same numbers, dollars and cents).
-  - NEVER use approximate language ("around", "about", "approximately").
-  - NEVER compute, infer, or extract alternative material totals from the PDF text.
-- Atomic line items (numbered lines) may be cited as examples only.
-  - Do NOT add them together.
-  - Do NOT treat them as totals.
-- In "Summary by Material":
-  - Mention major material categories only.
-  - Include the exact computed total for each category if provided.
-  - Describe what the category typically includes (removal, pad, labor, transitions, etc.).
-  - Do NOT add, change, or adjust dollar amounts.
-  - Use human-read understandable labels for each material (no snake_underscore material labels)
-- If a material category is discussed but no computed total is provided:
-  - Say "No computed total found for [material]".
-  - Suggest a neutral follow-up question.
-  - Do NOT estimate.
-
-ROOM TOTALS (CRITICAL):
-- You may be given a block labeled:
-  "PROVIDED ROOM TOTALS (FROM ESTIMATE — DO NOT MODIFY)".
-- These room totals are copied from explicit room total lines in the estimate
-  (e.g., lines labeled "Totals: [Room]").
-- If this block is present:
-  - Quote room totals EXACTLY as provided (same dollars and cents).
-  - NEVER compute, infer, or reconstruct room totals from the extracted estimate text.
-  - Only mention room totals that appear in this block.
-- If this block is NOT present:
-  - Do NOT list room totals.
-  - Do NOT guess or estimate room totals.
-  - You may optionally note that many estimates include a "Totals by Room/Area" summary page.
-- When discussing rooms:
-  - Only refer to actual rooms (Kitchen, Bathroom, Garage, Office, Stairs, etc.).
-  - Skip generic grouping labels such as "Main Level", "First Floor", "Second Floor", "Upper Level", and sketch labels like "SKETCH1".
-
-KEY NUMBERS (CRITICAL):
-- You may receive a block labeled:
-  "PROVIDED KEY NUMBERS (FROM ESTIMATE — DO NOT MODIFY)".
-- If present, treat these numbers as authoritative and quote them exactly.
-- Only state key numbers that appear in this block.
-- If the block is not present, say key numbers were not found and do not guess.
-
-FORMATTING (IMPORTANT):
-- Avoid using bold or italics around numeric amounts.
-  (Do not write **$1,622**.)
-- When explaining what a cost includes, put the explanation on a new line.
-  Example:
-  Total carpet cost: $1,628.89
-  Includes removal, pad, new carpet, and stair step charges.
-
-USER QUESTIONS OR CONTEXT:
-- The user may provide additional notes or questions.
-- Always provide a complete high-level explanation first.
-- If the user provided questions, address them in a dedicated section titled:
-  "Addressing Your Specific Questions".
+GENERAL MARKET RANGES:
+- You may also provide very general, approximate price ranges for common materials
+  (for example, basic vs mid-grade carpet or tile), to help the user understand
+  how their estimate compares to typical ranges.
+- When you do this:
+  - Make it clear these are broad, approximate ranges, not a quote for their project.
+  - Keep the ranges conservative and generic, not tied to a specific city.
+  - Clearly separate "numbers from your estimate" from "typical market ranges".
 
 HARD RULES:
 - You are NOT a lawyer, insurance adjuster, or contractor.
-- Treat statements from the insurance company, policy documents,
-  and contractor as authoritative.
+- Treat any statements from the insurance company, policy documents,
+  or contractor as authoritative.
 - NEVER say that an estimate is wrong, unfair, or incomplete.
-- NEVER say what insurance "should" cover or "should" pay.
-- You may ONLY suggest neutral questions such as:
+- NEVER say what the insurance company "should" cover or "should" pay.
+- You may ONLY suggest neutral questions the user can ask their adjuster
+  or contractor, such as:
   - "You may want to ask your adjuster whether..."
   - "You can confirm with your contractor if..."
-- If both an insurance and contractor estimate are provided:
-  - You MAY point out structural differences.
-  - ALWAYS frame them as neutral observations or questions.
-- Do NOT compute totals from the estimate text.
-- Do NOT use approximate language for computed totals.
+- If the user uploads both an insurance estimate and a contractor estimate:
+  - You MAY point out clear structural differences (e.g., one includes paint and the other does not),
+    but ALWAYS frame them as questions to ask:
+    - "Your insurance estimate includes X but your contractor's estimate also includes Y.
+       You may want to ask which parts you pay out of pocket."
+  - NEVER say that insurance 'should' pay for anything.
 
-OUTPUT STYLE (IMPORTANT):
-- Use plain text paragraphs.
-- Section headings MUST be bolded using **double asterisks**.
-- Do NOT use Markdown headings (##, ###).
-- Do NOT use bullet characters such as "-", "*", or "•".
-- Do NOT use backticks (`) or fenced code blocks.
-- Do NOT italicize text.
-- Do NOT apply bold formatting to numeric amounts.
-- Use line breaks for readability.
-- Do NOT indent with dashes or symbols.
-- Do NOT output any HTML or XML tags (no <div>, <span>, <br>, etc.).
-- Do NOT use angle brackets < or > anywhere in the output.
+PRICE AND ALLOWANCE QUESTIONS:
+- When the user asks what price point they should shop at (for tile, carpet, etc.):
+  1) First, look for any relevant numbers in the estimate (unit prices, allowances).
+     - Explain in plain language what those numbers mean and how they relate to
+       the user's choices (for example, "This estimate appears to use about $3.20/sq ft
+       for carpet materials and about $4.50/sq ft for tile materials.").
+  2) Second, if helpful, provide broad, typical market ranges for those materials
+     (for example, basic vs mid-range materials).
+  3) Emphasize that:
+     - These are general ranges, not a quote.
+     - Their adjuster and contractor can give exact allowances and pricing for their project.
+  4) Do NOT judge whether the estimate is "too high" or "too low."
+  5) Encourage the user to confirm with their adjuster or contractor:
+     - "You may want to ask, 'What is my material allowance per square foot for tile and carpet,
+        and how are any overages calculated?'"
 
-SPACING RULES:
-- After every bold section heading, insert exactly one blank line before the paragraph text.
-- Between major sections, insert exactly one blank line.
-- Do not put multiple blank lines in a row.
+COMPLETENESS CHECK (CRITICAL):
+Before you summarize flooring/material costs, scan the ENTIRE document for all related line items,
+even if they appear under different “areas” or on “CONTINUED” pages.
 
-MATERIALS LISTING RULE (IMPORTANT):
-- When listing multiple materials, rooms, or categories with dollar amounts:
-  - Put EACH item on its own line.
-  - Do NOT combine multiple items on the same line.
-  - Use the format:
-    Category name: dollar amount
+For CARPET specifically, you MUST look for and include costs from:
+- Stairs / stair landings / “Stairs (A1)” / “Landing” / “Hallway” / “Closet” / “Subroom”
+- Any “CONTINUED - <Area>” sections on the next page
+- Items that are not labeled as “carpet” but are part of carpet scope, such as:
+  - “R&R Carpet pad”
+  - “Remove Carpet” / “Remove Carpet pad”
+  - Stair-specific labor such as “step charge” or “waterfall” installation
+  - Transitions / thresholds (if present)
 
-EXPLANATION LIST RULE (IMPORTANT):
-- When explaining what multiple categories or tasks typically represent:
-  - Put EACH category explanation on its own line.
-  - Start each line with the category name.
-  - Do NOT combine multiple categories into a single paragraph.
-  - Do NOT use bullets or numbering.
+After you list carpet numbers, do a quick cross-check:
+- If any area in the document contains “carpet” / “pad” / “step charge” / “waterfall”, it must be reflected
+  either in the carpet section or explicitly stated as “found in <Area>: <line item>”.
 
+GOALS:
+1. Explain major sections of the estimate in plain English, grouped by room/area when possible.
+2. Identify decisions the homeowner needs to make (materials, rooms/areas, scope choices).
+3. Read and use specific numbers from the estimate to help the user understand
+   approximate price levels and how overages might occur.
+4. When useful, give separate, clearly-labeled general market ranges for common materials
+   so the user has context.
+5. Suggest polite, neutral follow-up questions for their adjuster and contractor.
+6. Remind the user that their insurance company and contractor have the final say.
 
 OUTPUT FORMAT (English):
-- Short introductory orientation.
-  * Provide room totals, each room on a separate line.
-
-- "What’s Driving Cost in This Estimate"
-  * Start with a one-sentence opener like: "Here are the main tasks and materials driving your costs."
-  * List major material category in decending order by total cost.
-  * For each category:
-    * Start a new paragraph.
-    * Begin with: Material category Name: $Exact Amount
-    * For category name, use natural, homeowner-friendly labels with no underscores and Capitalized first letter.
-    * Follow with one sentence explaining what that category typically includes.
-  * Insert one blank line between categories.
-  * Do not combine categories into the same paragraph.
-
-- "Key Numbers From Your Estimate"
-  * List each category from the Key numbers block on a separate line. Includes things like the following:
-    * Replacement Cost Value (RCV), if clearly present
-    * Deductible, if present
-    * Net payment, if present
-    * General Contractor Overhead & Profit, if present
-    * Material sales tax, if significant
-
-- If applicable: "Addressing Your Specific Questions"
-
-- "Questions to Ask Your Adjuster" (2-3)
-
-- "Questions to Ask Your Contractor" (2-3)
-
+- Short intro
+- "Summary by Area"
+- "Summary by material / task type" (if helpful)
+- Under “Summary by Material / Task Type”, include a short note for each material indicating which areas it was found in.
+- "Decisions You May Need to Make"
+- A section called "Key Numbers From Your Estimate" where you list important totals and unit prices you found (even if incomplete).
+- If useful, a brief section called "Typical Market Ranges" where you give general ranges for comparable materials.
+TYPICAL MARKET RANGES FORMATTING (STRICT):
+    - Use plain ASCII characters only.
+    - Do NOT use italics, bold, code, or markdown formatting.
+    - Write ranges using a simple hyphen with spaces on both sides.
+    - Format exactly like: "1.50 - 4.00 per sq. ft."
+    - Do NOT use en dashes (–) or em dashes (—).
+    - Always include two decimal places.
+- "Questions to Ask Your Adjuster"
+- "Questions to Ask Your Contractor"
 - End with a short reminder that this is general information only.
 """.strip()
-
 
 def estimate_explainer_tab(preferred_lang: Dict):
 
@@ -1293,11 +794,12 @@ def estimate_explainer_tab(preferred_lang: Dict):
         )
 
     extra_notes = st.text_area(
-        "Any specific questions about this estimate? (Optional)",
-        help="For example: 'Why is demolition so expensive?' or 'What's included in the carpet cost?'")
+        "Anything your adjuster or contractor already explained that we should treat as correct? (Optional)",
+        help="For example: 'Insurance will only replace the bedroom carpet, not the hallway.'",
+    )
 
     if st.button("Explain my estimate"):
-        # Validation
+        # ✅ NEW validation (replaces "insurance required")
         if not has_insurance and not has_contractor:
             st.warning("Please select at least one estimate type.")
             return
@@ -1313,18 +815,9 @@ def estimate_explainer_tab(preferred_lang: Dict):
         if not insurance_files and not contractor_files:
             st.warning("Please upload at least one estimate (PDF).")
             return
-        
-        # STATUS UPDATE WHILE BUILDING EXPLANATION
-        status_box = st.empty()
-        progress_bar = st.progress(0)
 
-        def set_step(step_num, msg):
-            progress_bar.progress(step_num / 4)
-            status_box.markdown(f"**{msg}**")
-
-
-        with st.spinner("I'm working through your estimate now. This usually takes about 20–30 seconds."):
-            # Store PDFs as bytes for follow-ups
+        with st.spinner("Reading your estimate PDFs and preparing an explanation..."):
+            # ✅ KEEP: store PDFs as bytes for follow-ups
             st.session_state["estimate_insurance_pdfs"] = [
                 {"name": f.name, "type": f.type, "bytes": f.getvalue()}
                 for f in (insurance_files or [])
@@ -1335,356 +828,53 @@ def estimate_explainer_tab(preferred_lang: Dict):
                 for f in (contractor_files or [])
             ]
 
-            # Extract text with pdfplumber (per-document)
-            from estimate_extract import extract_pdf_pages_text, join_page_packets
-            from material_totals import compute_material_totals
-
-            # ====================
-            # FILE SIGNATURE (for caching)
-            # ====================
-            current_files_sig = sorted(
-                [(f.name, len(f.getvalue())) for f in (insurance_files or [])] +
-                [(f.name, len(f.getvalue())) for f in (contractor_files or [])]
+            # ✅ OPTIONAL BUT RECOMMENDED: unified list for future JSON pipeline
+            st.session_state["estimate_docs"] = (
+                [{"role": "insurance", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (insurance_files or [])]
+                + [{"role": "contractor", "name": f.name, "type": f.type, "bytes": f.getvalue()} for f in (contractor_files or [])]
             )
 
-            prev_files_sig = st.session_state.get("estimate_uploaded_file_sig")
-            already_extracted = bool(st.session_state.get("estimate_extracted_docs"))
-            files_unchanged = (prev_files_sig == current_files_sig)
-
-            # ====================
-            # TIME DEBUG INIT
-            # ====================
-            pdf_time = 0.0
-            atomic_time = 0.0
-            bucket_time = 0.0
-            explain_time = 0.0
-
-            # ====================
-            # REUSE OR EXTRACT
-            # ====================
-            set_step(1, "Reading your PDF…")
-
-            if files_unchanged and already_extracted:
-                # Reuse cached extracted text; don't re-run pdfplumber
-                docs = st.session_state["estimate_extracted_docs"]
-                all_extracted_text = st.session_state.get("estimate_all_extracted_text", "")
-                print("[CACHE] Reusing cached extracted text (no pdfplumber run).")
-            else:
-                # Files changed (or no cache yet) → extract again
-                st.session_state["estimate_uploaded_file_sig"] = current_files_sig
-
-                docs = []  # list of {"role": "insurance"|"contractor", "name": str, "text": str}
-                all_extracted_text = ""
-
-                # ==============================
-                # Extract from insurance files
-                # ==============================
-                for f in (insurance_files or []):
-                    t0 = time.perf_counter()
-                    packets = extract_pdf_pages_text(f.getvalue())
-                    block = join_page_packets(packets)
-                    t1 = time.perf_counter()
-
-                    elapsed = t1 - t0
-                    pdf_time += elapsed
-                    print(f"[TIMING] pdfplumber extraction ({f.name}): {elapsed:.2f}s")
-
-                    docs.append({"role": "insurance", "name": f.name, "text": block})
-                    all_extracted_text += f"\n\n=== INSURANCE ESTIMATE: {f.name} ===\n\n{block}"
-
-                # ==============================
-                # Extract from contractor files
-                # ==============================
-                for f in (contractor_files or []):
-                    t0 = time.perf_counter()
-                    packets = extract_pdf_pages_text(f.getvalue())
-                    block = join_page_packets(packets)
-                    t1 = time.perf_counter()
-
-                    elapsed = t1 - t0
-                    pdf_time += elapsed
-                    print(f"[TIMING] pdfplumber extraction ({f.name}): {elapsed:.2f}s")
-
-                    docs.append({"role": "contractor", "name": f.name, "text": block})
-                    all_extracted_text += f"\n\n=== CONTRACTOR ESTIMATE: {f.name} ===\n\n{block}"
-
-                # Cache extracted text for downstream tabs (e.g., Renovation)
-                st.session_state["estimate_extracted_docs"] = [
-                    {"role": d["role"], "name": d["name"], "text": d["text"]}
-                    for d in docs
-                ]
-                st.session_state["estimate_all_extracted_text"] = all_extracted_text
-
-            # ====================
-            # Compute material totals for EACH uploaded document (Option A: show separately)
-            # ====================
-            set_step(2, "Organizing the numbers by category…")
-
-            material_results = []  # each: {"role","name","totals_ordered","result","totals_block","mini_sample"}
-            totals_blocks = []
-            room_totals_blocks = []
-            key_numbers_blocks = []
-
-            for d in docs:
-                if not d["text"].strip():
-                    continue
-
-                result = compute_material_totals(
-                    client=client,
-                    model=BUCKET_MODEL,
-                    extracted_text=d["text"],
-                )
-
-                labeled_totals_block = (
-                    "=== COMPUTED TOTALS (GROUND TRUTH — DO NOT MODIFY) ===\n"
-                    f"DOCUMENT: {d['role'].upper()} — {d['name']}\n"
-                    + "\n".join([f"{bucket}: ${amount:,.2f}" for bucket, amount in result["totals_ordered"]])
-                    + "\n==============================================="
-                )
-
-                mini_sample = build_mini_atomic_sample_from_grouped(
-                    result["grouped"],
-                    result["totals_ordered"],
-                    max_buckets=6,
-                    lines_per_bucket=3,
-                )
-
-                material_results.append(
-                    {
-                        "role": d["role"],
-                        "name": d["name"],
-                        "totals_ordered": result["totals_ordered"],
-                        "result": result,
-                        "totals_block": labeled_totals_block,
-                        "mini_sample": mini_sample,
-                    }
-                )
-
-                totals_blocks.append(labeled_totals_block)
-
-                timings = result.get("timings", {})
-                atomic_time += timings.get("atomic_extraction_s", 0.0)
-                bucket_time += timings.get("bucketing_llm_s", 0.0)
-
-                # ROOM TOTALS
-                room_totals = extract_room_totals_from_text(d["text"])
-                if room_totals:
-                    room_block = build_room_totals_block(room_totals, doc_role=d["role"], doc_name=d["name"])
-                    if room_block:
-                        room_totals_blocks.append(room_block)
-
-                # KEY NUMBERS (summary-page figures like RCV, deductible, net payment)
-                key_numbers = extract_key_numbers_from_text(d["text"])
-                key_block = build_key_numbers_block(key_numbers, doc_role=d["role"], doc_name=d["name"])
-                if key_block:
-                    key_numbers_blocks.append(key_block)
-
-            # Persist results for other tabs / follow-ups
-            st.session_state["material_totals_by_doc"] = material_results
-            totals_block = "\n\n".join(totals_blocks) if totals_blocks else ""
-            st.session_state["material_totals_block"] = totals_block
-
-            mini_samples_block = "\n\n".join([mr["mini_sample"] for mr in material_results]) if material_results else ""
-            st.session_state["material_mini_samples_block"] = mini_samples_block
-
-            # Optional: store these if you use them elsewhere
-            st.session_state["room_totals_blocks"] = room_totals_blocks
-            st.session_state["key_numbers_blocks"] = key_numbers_blocks
-
-
-            # Build user content with extracted text
-            user_content = f"""
-[USER CONTEXT]
-
-The user is a homeowner trying to understand one or more estimates for home repair or reconstruction.
-
-"""
-            
-            if extra_notes and extra_notes.strip():
-                user_content += f"""
-USER'S NOTES OR QUESTIONS (address these explicitly):
-{extra_notes.strip()}
-
-"""
-            
-            user_content += f"""
-ATOMIC LINE ITEMS (small sample for context only — do NOT add these up):
-{mini_samples_block if mini_samples_block.strip() else "(no atomic sample available)"}
-"""
-            if totals_block:
-                user_content += f"""
-
-{totals_block}
-
-CRITICAL RULE:
-- Do NOT recompute, modify, or “double-check” these totals.
-- Treat them as exact computed facts.
-- In the "Summary by Material" section, list the computed totals exactly as dollars and cents. Do not estimate or approximate.
-
-"""
-                
-            # ---- ROOM TOTALS BLOCK (assemble after per-doc loop) ----
-            room_totals_block_all = "\n\n".join(room_totals_blocks).strip()
-            st.session_state["room_totals_block"] = room_totals_block_all
-
-            if room_totals_block_all:
-                user_content += f"""
-
-{room_totals_block_all}
-
-CRITICAL RULE:
-- These room totals were extracted from explicit "Totals: <Room>" lines in the estimate.
-- Do NOT recompute, modify, or infer any room totals.
-- Only mention room totals that appear in this block.
-"""
-            #---- SUMMARY NUMBERS BLOCK ----------------
-            key_numbers_block_all = "\n\n".join(key_numbers_blocks).strip()
-            st.session_state["key_numbers_block"] = key_numbers_block_all
-
-            if key_numbers_block_all:
-                user_content += f"""
-
-{key_numbers_block_all}
-
-CRITICAL RULE:
-- These key numbers were extracted from explicitly labeled summary lines in the estimate.
-- Do NOT recompute, modify, or infer any of these numbers.
-- Only mention key numbers that appear in this block.
-"""
-
-
-            # st.text_area(
-            #     "DEBUG: per-document material totals (structured)",
-            #     str(st.session_state.get("material_totals_by_doc", [])),
-            #     height=200,
-            # )
-
-            # st.text_area(
-            #     "DEBUG: totals_block being injected",
-            #     totals_block or "(EMPTY)",
-            #     height=200,
-            # )
-
-            # st.text_area(
-            #     "DEBUG: tail of user_content",
-            #     user_content[-1500:],
-            #     height=250,
-            # )
-
-            # # DEBUG 12/22
-            # print("[DEBUG] FIRST PASS user_content chars:", len(user_content))
-            # print("[DEBUG] all_extracted_text chars:", len(all_extracted_text))
-            # print("[DEBUG] all_extracted_text included in first pass?", "EXTRACTED ESTIMATE TEXT" in user_content)
-
-            # Call GPT with text (not PDF)
-            set_step(3, "Putting together your explanation…")
-
-            t0 = time.perf_counter()  # time debug
             system_prompt = build_estimate_system_prompt()
-            english_answer = call_gpt(
+            english_answer = call_gpt_estimate_with_pdfs(
                 system_prompt=system_prompt,
-                user_content=user_content,
-                model = EXPLAIN_MODEL,
-                temperature=0.4,
+                insurance_files=insurance_files or [],
+                contractor_files=contractor_files or [],
+                extra_notes=extra_notes or "",
                 max_output_tokens=1100,
             )
 
-            t1 = time.perf_counter()  # time debug
-            explain_time = t1 - t0    # time debug
-
-            # Normalize unicode dashes
+            # ✅ Normalize unicode dashes for consistent on-screen rendering (and PDF/email)
             english_answer = english_answer.replace("–", "-").replace("—", "-")
-
-            # Sanitize markdown for Streamlit rendering
-            english_answer = sanitize_for_streamlit_markdown(english_answer)
-
-
+                                                          
             translated_answer = translate_if_needed(
                 english_answer, preferred_lang["code"]
             )
 
-            set_step(4, "Done.")
-            time.sleep(0.2)  # optional: lets users see “Done.” briefly
-            progress_bar.empty()
-            status_box.empty()
-
-
             # Store explanation for follow-ups
             st.session_state["estimate_explanation_en"] = english_answer
-            st.session_state["estimate_translated"] = translated_answer
+            st.session_state["estimate_translated"] = translated_answer  # ADD THIS
             st.session_state["estimate_extra_notes"] = extra_notes
 
+    # MOVE display code HERE - outside button block
+    if "estimate_explanation_en" in st.session_state and st.session_state["estimate_explanation_en"]:
+        st.markdown("### Explanation")
+        st.markdown(st.session_state["estimate_explanation_en"])
 
-            # =========================
-            # DEBUG OUTPUT (AFTER RUN)
-            # =========================
-            # st.text_area(
-            #     "DEBUG: timing breakdown",
-            #     "\n".join([
-            #         f"pdfplumber extraction: {pdf_time:.2f}s",
-            #         f"atomic extraction: {atomic_time:.2f}s",
-            #         f"bucketing LLM call: {bucket_time:.2f}s",
-            #         f"explanation LLM call: {explain_time:.2f}s",
-            #     ]),
-            #     height=150,
-            # )
-
-            # optional normalization (keeps plain text, just improves delimiter reliability)
-            st.session_state["estimate_explanation_en"] = (
-                st.session_state["estimate_explanation_en"]
-                .replace("\r\n", "\n")
-            )
-
-
-    # Display explanation (outside button block)
-    explanation = st.session_state.get("estimate_explanation_en", "")
-
-    if explanation.strip():
-        # Explanation
-        st.markdown("**Explanation**")
-        st.write("")
-
-        sections = split_by_bold_headings(explanation)
-
-        if not sections:
-            st.markdown(explanation)
-        else:
-            first = True
-            for heading, body in sections:
-                if not first:
-                    st.write("")  # space between blocks
-                first = False
-
-                title = "Overview"
-                if heading:
-                    title = heading.strip()
-                    if title.startswith("**") and title.endswith("**"):
-                        title = title[2:-2].strip()
-
-                st.markdown(f"**{title}**")
-
-                body_clean = body.strip()
-                if body_clean:
-                    safe = html.escape(body_clean).replace("\n", "<br>")
-                    st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
-
-
-        # Spanish Translation (only if present)
         if st.session_state.get("estimate_translated"):
             st.markdown("### Spanish Translation")
             st.markdown(st.session_state["estimate_translated"])
 
-        # Export buttons
+        # Export buttons - indented inside the if block
         col1, col2 = st.columns(2)
-
+        
         with col1:
             followups = st.session_state.get("estimate_followups", [])
             label = "Download PDF"
             if followups:
                 label += f" (includes {len(followups)} follow-up{'s' if len(followups) > 1 else ''})"
-
+            
             pdf_bytes = create_explanation_pdf(
-                explanation,  # use the local variable
+                st.session_state["estimate_explanation_en"],
                 "Estimate Explanation",
                 followups=followups
             )
@@ -1695,15 +885,15 @@ CRITICAL RULE:
                 mime="application/pdf",
                 use_container_width=True
             )
-
+        
         with col2:
-            email_body = explanation
+            email_body = st.session_state['estimate_explanation_en']
             followups = st.session_state.get("estimate_followups", [])
             if followups:
                 email_body += "\n\n--- Follow-up Q&A ---\n\n"
                 for i, f in enumerate(followups, 1):
                     email_body += f"Q{i}: {f['question']}\n\n{f['answer']}\n\n"
-
+            
             mailto_link = f"mailto:?subject=My Estimate Explanation&body={urllib.parse.quote(email_body[:2000])}"
             if st.button("Email This", key="email_estimate_btn", use_container_width=True):
                 st.markdown(
@@ -1711,8 +901,7 @@ CRITICAL RULE:
                     unsafe_allow_html=True,
                 )
 
-
-    # Follow-up section
+    # Follow-up (ONLY show after initial explanation exists)
     if st.session_state.get("estimate_explanation_en"):
         st.markdown("---")
         st.markdown("#### Follow-up question about this explanation")
@@ -1729,12 +918,17 @@ CRITICAL RULE:
             else:
                 prev_expl = st.session_state.get("estimate_explanation_en", "")
                 extra_prev = st.session_state.get("estimate_extra_notes", "")
+
+                # Retrieve stored PDFs (bytes) so follow-ups are reproducible
                 insurance_pdf_data = st.session_state.get("estimate_insurance_pdfs", [])
                 contractor_pdf_data = st.session_state.get("estimate_contractor_pdfs", [])
 
+                # Defensive checks (should usually pass if the user already ran Explain)
+                docs = st.session_state.get("estimate_docs", [])
+
                 if not prev_expl.strip():
                     st.warning("Please run **Explain my estimate** first.")
-                elif not insurance_pdf_data and not contractor_pdf_data:
+                elif not docs:
                     st.warning(
                         "Your uploaded estimate PDFs aren't available anymore. "
                         "Please re-upload and run **Explain my estimate** again."
@@ -1742,77 +936,59 @@ CRITICAL RULE:
                 else:
                     with st.spinner("Generating follow-up explanation..."):
                         follow_system = build_estimate_system_prompt() + """
+    You are answering a follow-up question about an estimate explanation you already provided.
 
-You are answering a follow-up question about an estimate explanation you already provided.
+    CRITICAL INSTRUCTIONS:
+    - Do NOT regenerate or rewrite the entire explanation
+    - Do NOT repeat information already covered in the previous explanation
+    - ONLY provide additional detail, clarification, or specific information about what the user asked
+    - Keep your response focused and concise (2-4 paragraphs maximum)
+    - You have access to the original estimate PDFs again, so you can reference specific line items, numbers, or details if the user asks about them
+    - If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
+    - Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
 
-CRITICAL INSTRUCTIONS:
-- Do NOT regenerate or rewrite the entire explanation
-- Do NOT repeat information already covered in the previous explanation
-- ONLY provide additional detail, clarification, or specific information about what the user asked
-- Keep your response focused and concise (2-4 paragraphs maximum)
-- You have access to the original estimate text again, so you can reference specific line items, numbers, or details if the user asks about them
-- If the topic was already covered in the original explanation, acknowledge that and provide deeper detail or specific examples
-- Do NOT contradict your previous explanation unless you find a clear error when re-reading the documents
-
-Your goal is to ADD to the conversation, not restart it.
-""".strip()
+    Your goal is to ADD to the conversation, not restart it.
+    """.strip()
 
                         follow_notes = f"""
-PREVIOUS EXPLANATION (for context):
-{prev_expl}
+    PREVIOUS EXPLANATION (for context):
+    {prev_expl}
 
-USER'S FOLLOW-UP QUESTION:
-{follow_q}
+    USER'S FOLLOW-UP QUESTION:
+    {follow_q}
 
-ORIGINAL NOTES FROM USER:
-{extra_prev or 'None provided'}
-""".strip()
+    ORIGINAL NOTES FROM USER:
+    {extra_prev or 'None provided'}
+    """.strip()
 
-                        # Re-extract text for follow-up
-                        from estimate_extract import extract_pdf_pages_text, join_page_packets
-                        
-                        all_text = ""
+                        # Reconstruct file-like objects from stored bytes
+                        from io import BytesIO
+
+                        insurance_files_reconstructed = []
                         for pdf_data in insurance_pdf_data:
-                            packets = extract_pdf_pages_text(pdf_data["bytes"])
-                            all_text += f"\n\n=== INSURANCE: {pdf_data['name']} ===\n\n"
-                            all_text += join_page_packets(packets)
-                        
+                            file_obj = BytesIO(pdf_data["bytes"])
+                            file_obj.name = pdf_data["name"]
+                            file_obj.type = pdf_data["type"]
+                            insurance_files_reconstructed.append(file_obj)
+
+                        contractor_files_reconstructed = []
                         for pdf_data in contractor_pdf_data:
-                            packets = extract_pdf_pages_text(pdf_data["bytes"])
-                            all_text += f"\n\n=== CONTRACTOR: {pdf_data['name']} ===\n\n"
-                            all_text += join_page_packets(packets)
-                        
-                        follow_user_content = f"""
-{follow_notes}
+                            file_obj = BytesIO(pdf_data["bytes"])
+                            file_obj.name = pdf_data["name"]
+                            file_obj.type = pdf_data["type"]
+                            contractor_files_reconstructed.append(file_obj)
 
-EXTRACTED ESTIMATE TEXT:
-{all_text}
-"""
-                        
-                        # Inject computed totals again so follow-ups stay consistent
-                        totals_block = st.session_state.get("material_totals_block", "")
-                        if totals_block:
-                            follow_user_content += f"""
-
-{totals_block}
-
-CRITICAL RULE:
-- Do NOT recompute, modify, or “double-check” these totals.
-- Treat them as exact computed facts.
-"""
-
-                        
-                        follow_en = call_gpt(
+                        follow_en = call_gpt_estimate_with_pdfs(
                             system_prompt=follow_system,
-                            user_content=follow_user_content,
-                            model=EXPLAIN_MODEL,
-                            temperature=0.3,
+                            insurance_files=insurance_files_reconstructed,
+                            contractor_files=contractor_files_reconstructed,
+                            extra_notes=follow_notes,
                             max_output_tokens=700,
                         )
 
-                        # Normalize dashes
+                        # Normalize dashes for consistent rendering/export
                         follow_en = follow_en.replace("–", "-").replace("—", "-")
-                        follow_en = sanitize_for_streamlit_markdown(follow_en)
+
                         follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
                     # Store follow-up
@@ -1833,14 +1009,18 @@ CRITICAL RULE:
         st.markdown("---")
         st.caption("Run **Explain my estimate** first to enable follow-up questions.")
 
-    # Disclaimers
+    # Full disclaimers at bottom
     st.markdown("---")
-    st.markdown(BASE_DISCLAIMER_EN)
-    st.markdown(AGENT_A_DISCLAIMER_EN)
 
+    # English block first
+    st.markdown(BASE_DISCLAIMER_EN)
+    st.markdown(AGENT_A_DISCLAIMER_EN)  # Or AGENT_B / AGENT_C depending on tab
+
+    # Spanish block second (only if selected)
     if preferred_lang["code"] == "es":
         st.markdown(BASE_DISCLAIMER_ES)
         st.markdown(AGENT_A_DISCLAIMER_ES)
+
 
 
 # ======================
@@ -1849,7 +1029,8 @@ CRITICAL RULE:
 
 def build_renovation_system_prompt() -> str:
     return """
-You are a friendly and personable assistant that explains typical sequences for home repair or renovation projects.
+You are an assistant that explains typical sequences for home repair projects,
+especially after water damage (e.g., laundry room leaks, bedroom carpet damage).
 
 HARD RULES:
 - You are NOT the user's contractor, engineer, or inspector.
@@ -1857,35 +1038,31 @@ HARD RULES:
 - If the user provides a sequence from their contractor, treat it as correct and primary.
   You may only explain it and suggest neutral questions they can ask.
 - When you describe a sequence, use words like "often", "typically", or "in many projects".
-  Always note that the user should follow their contractor's specific plan if it differs.
+  Always add that the user should follow their contractor's specific plan if it differs.
 
 GENERAL SEQUENCING PRINCIPLES (apply to all projects):
 - Construction generally proceeds from structure → mechanical/electrical → drywall and surfaces → flooring → trim → paint touch-ups → fixtures.
-- Do NOT place a step before something that depends on it.
+- Do NOT place a step before something that depends on it. 
   (Example: do not paint or caulk trim before trim is installed; do not install trim before flooring.)
 - Distinguish between early-stage painting (walls/ceiling after drywall) and final painting (trim and touch-ups after trim installation).
 - Flooring, regardless of type, typically goes in before baseboards or shoe molding.
-- If the scenario is ambiguous, choose the most widely used sequence and clearly note that individual contractors may vary.
+- If the user scenario is ambiguous, choose the most widely used sequence and clearly note that individual contractors may vary.
 - The homeowner may not list every step. If they mention major items (e.g., tile, carpet, drywall repair),
-  you may explain commonly related steps (such as underlayment, grout, baseboard reinstallation, and paint touch-ups),
-  but describe these as "typically" or "often" included rather than assuming they are definitely in scope.
+  you may include standard related steps (such as underlayment, grout, baseboard reinstallation, and paint touch-ups),
+  but describe these as "typically" or "often" included rather than assuming they are definitely in the contractor's scope.
 
 GOALS:
-1. Explain a clear, typical order of operations based on the user's inputs.
-2. Describe what the homeowner may need to prepare or decide at different stages of the project.
-3. Suggest polite, neutral questions the homeowner can ask their contractor to confirm details.
+1. Suggest a clear, typical order of operations based on the user inputs
+   (demo, subfloor repair, tile, grout, baseboards, paint, carpet, cabinets, countertops, etc.).
+2. Provide a short checklist of what the homeowner may need to prepare or decide before each step.
+3. Suggest polite questions they can ask their contractor to confirm details.
 
-OUTPUT FORMAT (IMPORTANT):
-- Use plain text paragraphs.
-- Section headings MUST be bolded using **double asterisks**.
-- Do NOT use Markdown headings (##, ###).
-- Do NOT use bullet characters such as "-", "*", or "•".
-- Do NOT format content as checklists.
-- Use line breaks between sections for readability.
-- Keep a calm, explanatory tone.
-- End with a short reminder that this is general guidance and the contractor's plan should take precedence.
+OUTPUT FORMAT (English):
+- "Typical Sequence for Your Project"
+- "What You May Need to Prepare"
+- "Questions to Ask Your Contractor"
+- Short reminder at the end that this is general guidance only.
 
-Write clearly and concisely.
 """.strip()
 
 
@@ -1982,70 +1159,6 @@ def renovation_plan_tab(preferred_lang: Dict):
     
         with st.spinner("Putting together a typical sequence..."):
 
-            estimate_docs = st.session_state.get("estimate_extracted_docs", [])
-            estimate_text_block = ""
-
-            if estimate_docs:
-                estimate_text_block = (
-                    "\n\nESTIMATE EXCERPT (FOR CONTEXT ONLY — DO NOT EXPAND SCOPE):\n"
-                    + "\n\n".join(
-                        [f"=== {d['role'].upper()} — {d['name']} ===\n{d['text']}" for d in estimate_docs]
-                    )
-                )
-
-            MAX_ESTIMATE_CHARS = 4000
-            if len(estimate_text_block) > MAX_ESTIMATE_CHARS:
-                estimate_text_block = (
-                    estimate_text_block[:MAX_ESTIMATE_CHARS]
-                    + "\n\n[...estimate excerpt truncated...]\n"
-                )
-
-            # Deterministic keyword set from user selections
-            room_terms = [r.strip().lower() for r in (rooms or []) if r and r.strip()]
-            if other_rooms:
-                room_terms += [w.strip().lower() for w in other_rooms.replace("\n", ",").split(",") if w.strip()]
-
-            work_terms = [w.strip().lower() for w in (work_types or []) if w and w.strip()]
-            if other_work:
-                work_terms += [w.strip().lower() for w in other_work.replace("\n", ",").split(",") if w.strip()]
-
-            # Filter lines that mention ANY room term OR ANY work term (broad on purpose for now)
-            filtered_chunks = []
-            for d in estimate_docs:
-                text = d.get("text", "") or ""
-                lines = text.splitlines()
-
-                kept = []
-                for line in lines:
-                    l = line.lower()
-                    if any(rt in l for rt in room_terms) or any(wt in l for wt in work_terms):
-                        kept.append(line)
-
-                if kept:
-                    filtered_chunks.append(
-                        f"=== {d['role'].upper()} — {d['name']} (FILTERED) ===\n" + "\n".join(kept)
-                    )
-
-            if filtered_chunks:
-                estimate_text_block = (
-                    "\n\nESTIMATE EXCERPT (FILTERED BY YOUR SELECTED ROOMS/WORK — CONTEXT ONLY):\n"
-                    + "\n\n".join(filtered_chunks)
-                )
-
-            # Hard cap after filtering
-            MAX_ESTIMATE_CHARS = 4000
-            if len(estimate_text_block) > MAX_ESTIMATE_CHARS:
-                estimate_text_block = (
-                    estimate_text_block[:MAX_ESTIMATE_CHARS]
-                    + "\n\n[...filtered estimate excerpt truncated...]\n"
-                )
-
-            print(
-                f"[RENOVATION FILTER] rooms={room_terms} work={work_terms} | "
-                f"estimate_text_chars={len(estimate_text_block)}"
-            )
-
-
 #==================================
 # -----USER CONTENT for prompt---#
 #===================================
@@ -2064,20 +1177,10 @@ CONTRACTOR'S SEQUENCE (if any, treat as primary):
 EXTRA NOTES:
 {extra_notes or 'None provided'}
 """.strip()
-
-            user_content = (user_content + estimate_text_block).strip()
-
-            print(
-                f"[RENOVATION PROMPT] "
-                f"user_content chars={len(user_content)} | "
-                f"estimate_docs={len(estimate_docs)} | "
-                f"estimate_text_chars={len(estimate_text_block)}"
-            )
-
             # -----end USER CONTENT-------#
 
             system_prompt = build_renovation_system_prompt()
-            english_answer = call_gpt(system_prompt, user_content, model=EXPLAIN_MODEL, temperature=0.4, max_output_tokens=700)
+            english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
             translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
 
             # NEW: Store for follow-ups
@@ -2093,58 +1196,9 @@ EXTRA NOTES:
             }
 
     # MOVE display code HERE - outside button block
-
-    estimate_docs = st.session_state.get("estimate_extracted_docs", [])
-    has_estimate_text = bool(estimate_docs)
-
-    print(f"[RENOVATION] has_estimate_text={has_estimate_text}, docs={len(estimate_docs)}")
-
-
     if "renovation_explanation_en" in st.session_state and st.session_state["renovation_explanation_en"]:
         st.markdown("### Typical plan")
-        #st.markdown(st.session_state["renovation_explanation_en"])
-        # ==============================
-        # Renovation explanation display
-        # ==============================
-
-        renovation_text = st.session_state.get("renovation_explanation_en", "")
-
-        if renovation_text.strip():
-            sections = split_by_bold_headings(renovation_text)
-
-            if not sections:
-                # Fallback: render entire text inside styled container
-                safe = html.escape(renovation_text).replace("\n", "<br>")
-                st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
-            else:
-                first = True
-                for heading, body in sections:
-                    if not first:
-                        st.write("")  # spacing between sections
-                    first = False
-
-                    title = "Overview"
-                    if heading:
-                        title = heading.strip()
-                        if title.startswith("**") and title.endswith("**"):
-                            title = title[2:-2].strip()
-
-                    st.markdown(f"**{title}**")
-
-                    body_clean = body.strip()
-                    if body_clean:
-                        safe = html.escape(body_clean).replace("\n", "<br>")
-                        st.markdown(
-                            f'<div class="section-body">{safe}</div>',
-                            unsafe_allow_html=True
-                        )
-
-        # Spanish translation (if present)
-        if st.session_state.get("renovation_translated"):
-            st.write("")
-            st.markdown("**Spanish Translation**")
-            st.markdown(st.session_state["renovation_translated"])
-
+        st.markdown(st.session_state["renovation_explanation_en"])
         
         if st.session_state.get("renovation_translated"):
             st.markdown("### Spanish Translation")
@@ -2241,7 +1295,7 @@ USER'S FOLLOW-UP QUESTION:
 {follow_q_reno}
 """.strip()
 
-                        follow_en = call_gpt(follow_system, follow_notes, model=EXPLAIN_MODEL, temperature=0.3, max_output_tokens=600)
+                        follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
                         follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
                     # Storage code - OUTSIDE spinner
@@ -2286,7 +1340,8 @@ USER'S FOLLOW-UP QUESTION:
 
 def build_design_system_prompt() -> str:
     return """
-You are a general interior-design helper for homeowners selecting finishes and materials during repairs or remodeling.
+You are a general interior-design helper for homeowners selecting finishes
+and materials during repairs or remodeling.
 You must base all suggestions ONLY on the materials the user selected.
 
 ALLOWED MATERIAL CATEGORIES (examples, not exhaustive):
@@ -2305,46 +1360,32 @@ HARD RULES:
 2. Treat any design recommendations from the user's contractor or designer as primary.
 3. NEVER introduce materials the user did not choose.
 4. Keep suggestions practical, neutral, and easy to understand.
-5. Consider at least one alternative design philosophy so the user gets a balanced view.
-6. Emphasize that real-world lighting and physical samples matter more than AI suggestions.
+5. Consider alternative design philosophies to ensure you give the user a balanced view.
+6. Emphasize that real-world lighting and samples matter more than AI suggestions.
 
 GOALS:
-1. Use the room type, selected materials, wall color, adjacent finishes, style preferences, contrast preferences,
-   and usage (kids/pets/traffic) to propose 2–3 clear and coherent design directions.
-2. Discuss material-specific considerations relevant to ONLY the user-selected materials.
-   For example:
-   - If tile is selected: grout color, finish, pattern/layout, sealing.
-   - If carpet is selected: pile/texture, padding, stain resistance, seam placement.
-   - If cabinets are selected: undertones, door style, hardware finishes.
-   - If paint is selected: undertones, natural/artificial light, sheen.
-   - If countertops are selected: movement/veining, edge profile, sheen.
-   - If multiple materials are selected: how they coordinate.
+1. Use the room type, selected materials, wall color, adjacent finishes,
+   style preferences, contrast preferences, and usage (kids/pets/traffic)
+   to propose 2–3 clear and coherent "design directions."
+2. Discuss material-specific considerations:
+   - If tile is selected → grout color, finish, pattern.
+   - If cabinets are selected → undertones, hardware finishes.
+   - If paint is selected → undertones, natural/artificial light.
+   - If countertops are selected → veining, movement, sheen.
+   - If multiple materials are selected → how they coordinate.
 3. Give practical notes about durability, maintenance, and color matching.
-4. Mention a few commonly overlooked decisions that may apply to the user's selected materials (e.g., tile layout, carpet padding, grout sealing, hardware finishes).
-5. Suggest polite, neutral questions the user can ask their contractor or designer.
+4. Also discuss additional factors and decisions the user may need to consider, such as tile layout, carpet padding, grout sealing, cabinet hardware styles, etc.
+4. Suggest polite, neutral questions the user can ask their contractor or designer.
 
-OUTPUT FORMAT (IMPORTANT):
-- Use plain text paragraphs.
-- Section headings MUST be wrapped in **double asterisks**.
-   - If headings are not bolded, the output will be considered invalid
-- Use the exact section headings listed below, in this order.
-- Do NOT use Markdown headings (##, ###).
-- Do NOT use bullet characters such as "-", "*", or "•".
-- Do NOT format content as checklists.
-- Use line breaks between sections for readability.
-
-REQUIRED SECTION HEADINGS (use these exact headings):
-**Overall Design Direction**
-**Option 1**
-**Option 2**
-(Include **Option 3** only if truly helpful)
-**Material-Specific Notes**
-**Practical Considerations**
-**Questions to Ask Your Contractor or Designer**
-**Final Reminder**
-
-FINAL REMINDER CONTENT:
-End with a short reminder that this is general guidance only and that lighting/samples and the contractor/designer's guidance should take precedence.
+OUTPUT FORMAT (English):
+- "Overall Design Direction"
+- "Option 1"
+- "Option 2"
+- (Option 3 if helpful)
+- "Material-Specific Notes"
+- "Practical Considerations"
+- "Questions to Ask Your Contractor or Designer"
+- Short reminder that this is general guidance only.
 """.strip()
 
 
@@ -2514,7 +1555,7 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
 """.strip()
 
             system_prompt = build_design_system_prompt()
-            english_answer = call_gpt(system_prompt, user_content, model=EXPLAIN_MODEL, temperature=0.4, max_output_tokens=700)
+            english_answer = call_gpt(system_prompt, user_content, max_output_tokens=700)
             translated_answer = translate_if_needed(english_answer, preferred_lang["code"])
 
 # NEW: Store for follow-ups
@@ -2534,54 +1575,13 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
 
 # MOVE display code HERE - outside button block
     if "design_explanation_en" in st.session_state and st.session_state["design_explanation_en"]:
-        # ==============================
-        # Design explanation display (outside button block)
-        # ==============================
-
-        design_text = st.session_state.get("design_explanation_en", "")
-
-        if design_text.strip():
-            st.markdown("**Suggestions**")
-            st.write("")
-
-            sections = split_by_bold_headings(design_text)
-
-            if not sections:
-                safe = html.escape(design_text).replace("\n", "<br>")
-                st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
-            else:
-                first = True
-                for heading, body in sections:
-                    if not first:
-                        st.write("")  # spacing between sections
-                    first = False
-
-                    title = "Overview"
-                    if heading:
-                        title = heading.strip()
-                        if title.startswith("**") and title.endswith("**"):
-                            title = title[2:-2].strip()
-
-                    st.markdown(f"**{title}**")
-
-                    body_clean = body.strip()
-                    if body_clean:
-                        safe = html.escape(body_clean).replace("\n", "<br>")
-                        st.markdown(f'<div class="section-body">{safe}</div>', unsafe_allow_html=True)
-
-        # Spanish translation (only if present)
-        design_es = st.session_state.get("design_translated", "")
-        if design_es:
-            st.write("")
-            st.markdown("**Spanish Translation**")
-            safe_es = html.escape(design_es).replace("\n", "<br>")
-            st.markdown(f'<div class="section-body">{safe_es}</div>', unsafe_allow_html=True)
-
-        # Export buttons (only show if we have content)
-        if design_text.strip() or design_es:
-            col1, col2 = st.columns(2)
-
-
+        st.markdown("### Suggestions")
+        st.markdown(st.session_state["design_explanation_en"])
+        
+        if st.session_state.get("design_translated"):
+            st.markdown("### Spanish Translation")
+            st.markdown(st.session_state["design_translated"])
+        
         # Export buttons
         col1, col2 = st.columns(2)
         
@@ -2675,7 +1675,7 @@ USER'S FOLLOW-UP QUESTION:
 {follow_q_design}
 """.strip()
 
-                        follow_en = call_gpt(follow_system, follow_notes, model=EXPLAIN_MODEL, temperature=0.3,max_output_tokens=600)
+                        follow_en = call_gpt(follow_system, follow_notes, max_output_tokens=600)
                         follow_es = translate_if_needed(follow_en, preferred_lang["code"])
 
                     # Storage code - OUTSIDE spinner
