@@ -2446,7 +2446,7 @@ def design_helper_tab(preferred_lang: Dict):
         "High traffic (everyone walks here)",
     ]
     traffic_choice = st.selectbox(
-        "Who uses this space?",
+        "Who uses this space? (Optional)",
         traffic_options,
         index=0,
     )
@@ -2776,7 +2776,7 @@ def main():
         )
 
         st.markdown("""
-### What you can do here
+### Use the tabs above to choose one of these tools:
 
 1. **Estimate Explainer**  
    Upload your insurance estimate (and optionally your contractor's estimate) to see
@@ -2800,7 +2800,7 @@ def main():
             <div style='text-align: center;'>
                 <img src='data:image/png;base64,{}' width='180' style='margin-bottom: -2rem;'>
                 <div style='font-size: 0.85rem; color: #64748B; margin-top: 1.5em;'>
-                    Built by ElseFrame AI Studio
+                    Built by ElseFrame
                 </div>
             </div>
             """.format(base64.b64encode(open("elseframe2.png", "rb").read()).decode()), unsafe_allow_html=True)
