@@ -87,26 +87,27 @@ h2, h3 {
     border-color: #60A5FA !important;
     color: #0F172A !important;
 }
-
-/* Custom app title */
-.custom-app-title {
-    font-family: 'Cabinet Grotesk', sans-serif !important;
-    font-size: 2rem !important;
-    font-weight: 500 !important;
-    margin: 0 0 0.25rem 0;
-    padding: 0;
-    line-height: 1.1;
+      
+.hero-title {
+    font-family: 'Cabinet Grotesk', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 650;
+    line-height: 1.15;
     letter-spacing: -0.02em;
     color: #420741ff;
+    margin-bottom: 0.75rem;
 }
 
-/* Subtitle under the main title */
-.header-subtitle {
-    font-size: 0.95rem;
-    color: #a75ea7ff;
-    margin-top: 0.25rem;
-    margin-bottom: 0.35rem; 
+.hero-subtitle {
+    font-family: "Manrope", sans-serif !important;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #475569;   /* slate-600 */
+    margin-bottom: 0.25rem;
+    padding-left: 0.08em;
 }
+
 
 /* Language label + select group */
 .lang-wrap {
@@ -154,8 +155,9 @@ h3 {
 /* ===== BACKGROUND COLORS ===== */
 /* Make app background pure white */
 .stApp {
-    background-color: #FFFFFF !important;
+    background-color: #FAFAFA !important;
 }
+
 
 /* Make disclaimer box light-medium gray */
 .disclaimer-box {
@@ -2723,9 +2725,13 @@ def main():
 
     with header_left:
         st.markdown("""
-            <div class="custom-app-title">Home Repair Assistant</div>
-            <div class="header-subtitle">
-                Understand insurance estimates. Plan repairs. Make design decisions.
+            <div class="hero-subtitle">
+                NextStep
+            </div>
+            <div class="hero-title">
+                Understand insurance estimates.<br>
+                Plan repairs.<br>
+                Make design decisions.
             </div>
         """, unsafe_allow_html=True)
 
@@ -2798,9 +2804,8 @@ def main():
         with footer_col2:
             st.markdown("""
             <div style='text-align: center;'>
-                <img src='data:image/png;base64,{}' width='180' style='margin-bottom: -2rem;'>
                 <div style='font-size: 0.85rem; color: #64748B; margin-top: 1.5em;'>
-                    Built by ElseFrame
+                        Built by ElseFrame © 2026
                 </div>
             </div>
             """.format(base64.b64encode(open("elseframe2.png", "rb").read()).decode()), unsafe_allow_html=True)
