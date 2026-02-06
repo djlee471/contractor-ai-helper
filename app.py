@@ -1677,7 +1677,7 @@ CRITICAL RULE:
             st.markdown(st.session_state["estimate_translated"])
 
         # Export buttons
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, vertical_alignment="center")
 
         with col1:
             followups = st.session_state.get("estimate_followups", [])
@@ -2153,7 +2153,7 @@ EXTRA NOTES:
             st.markdown(st.session_state["renovation_translated"])
         
         # Export buttons
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, vertical_alignment="center")
         
         with col1:
             followups = st.session_state.get("renovation_followups", [])
@@ -2585,7 +2585,7 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
 
 
         # Export buttons
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, vertical_alignment="center")
         
         with col1:
             followups = st.session_state.get("design_followups", [])
