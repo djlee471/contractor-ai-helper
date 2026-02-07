@@ -161,7 +161,7 @@ h3 {
 /* ===== BACKGROUND COLORS ===== */
 /* Make app background pure white. Switch back to FAFAFA later*/
 .stApp {
-    background-color: #FFFFFF !important;
+    background-color: #FAFAFA !important;
 }
 
 
@@ -1200,14 +1200,14 @@ TOOLS (recommend only one per message):
 3) Design Helper — helps with design/material decisions using photos and descriptions.
 
 DEFAULT START:
-- If the user is unsure where to begin, or the question is broad/overwhelmed, default to:
+- If the user is unsure where to begin, default to:
   **Estimate Explainer** (it’s usually the best first anchor).
 
 RESPONSE SHAPE:
 - 4–6 short lines total (friendly, not robotic).
 - Start with a brief empathy/acknowledgement (1 sentence).
-- Then recommend ONE tool using this pattern:
-  “People usually start by X. The [Tool Name] is the best place to begin.”
+- Then recommend ONE tool, which best fits the user's input, using this pattern:
+  “People often start by X. The [Tool Name] is the best place to begin.”
 - Then include “To use it well:” with 1–3 practical points.
 - End with one gentle next step that explains what the user will do *in that tool*.
   (Example: what they’ll upload or describe once they open that tab.)
@@ -2990,11 +2990,13 @@ def main():
                             unsafe_allow_html=True,
                         )
                     else:
+                        # Match the rendering style used in other tabs (convert \n to <br>)
+                        safe_content = html.escape(msg["content"]).replace("\n", "<br>")
                         st.markdown(
                             f"""
                             <div class="chat-row chat-assistant">
                             <span class="chat-label">You:</span>
-                            <span class="chat-text">{msg["content"]}</span>
+                            <span class="chat-text">{safe_content}</span>
                             </div>
                             """,
                             unsafe_allow_html=True,
@@ -3011,20 +3013,32 @@ def main():
         MAX_HOME_TURNS = 3
 
         user_text = ""
-        submitted = False
 
+        # --- Chat input / turn limit ---
         if st.session_state.home_turn_count >= MAX_HOME_TURNS:
             if preferred_lang["code"] == "es":
-                st.caption("Este chat en la página de inicio está limitado a 3 preguntas para mantenerlo rápido. (Luego agregaremos un botón de reinicio.)")
+                st.caption(
+                    "Este chat en la página de inicio está limitado a 3 preguntas para mantenerlo rápido."
+                )
             else:
-                st.caption("This Home chat is limited to 3 questions to keep it quick. (We’ll add a reset button later.)")
+                st.caption(
+                    "This Home chat is limited to 3 questions to keep it quick."
+                )
         else:
-            disabled = st.session_state.home_turn_count >= MAX_HOME_TURNS
-
             user_text = st.chat_input(
                 placeholder,
-                disabled=disabled,
+                disabled=False,
             )
+
+        # --- Clear chat button (ONLY after chat has started) ---
+        if st.session_state.home_messages:
+            clear_col, _ = st.columns([1, 6])
+            with clear_col:
+                if st.button("Start over", type="secondary"):
+                    st.session_state.home_messages = []
+                    st.session_state.home_turn_count = 0
+                    st.rerun()
+
 
         if user_text and user_text.strip():
             user_text = user_text.strip()
@@ -3064,6 +3078,16 @@ def main():
                     assistant_es = translate_if_needed(assistant_en, "es")
                     if assistant_es:
                         assistant_text = assistant_es.strip()
+
+                # Normalize line endings
+                text = assistant_text.strip().replace("\r\n", "\n").replace("\r", "\n")
+
+                # Collapse any runs of blank lines down to a single blank line
+                text = re.sub(r"\n\n+", "\n\n", text)
+
+                # Treat each remaining newline as a paragraph break (1 blank line)
+                lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+                assistant_text = "\n\n".join(lines)
 
             st.session_state.home_messages.append({"role": "assistant", "content": assistant_text})
             st.rerun()
