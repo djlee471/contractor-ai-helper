@@ -40,7 +40,7 @@ st.markdown("""
 <style>
 /* Load fonts FIRST - must be at top */
 @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap');
 
 /* Control top spacing and page width */
 .block-container {
@@ -64,15 +64,16 @@ st.markdown("""
     margin-top: 2rem !important;
 }
 
-/* Apply Inter to most UI text */
+/* Apply Manrope to most UI text */
 html, body, div, span, input, textarea, button, select, label, p, li, ul, ol, [class], * {
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
-            
+
+/* Body copy tuning */
 p, li {
     font-weight: 400 !important;
     line-height: 1.65 !important;
-    letter-spacing: 0.003em;
+    letter-spacing: 0.002em; /* slightly less tracking than before */
     color: #1F2937 !important;
 }
 
@@ -81,6 +82,7 @@ html, body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+
 
 /* Keep headings neutral */
 h2, h3 {
@@ -95,7 +97,7 @@ h2, h3 {
 }
       
 .hero-title {
-    font-family: 'Cabinet Grotesk', sans-serif;
+    font-family: 'Cabinet Grotesk', sans-serif !important;
     font-size: 2.2rem;
     font-weight: 650;
     line-height: 1.15;
