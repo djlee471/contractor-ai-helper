@@ -362,6 +362,11 @@ select:hover {
 .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] p {
     font-weight: 800 !important;
 }
+            
+/* Ensure active tab text itself turns purple */
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] p {
+    color: #420741 !important;
+}
 
 /* Tab highlight bar (underline) */
 .stTabs [data-baseweb="tab-highlight"] {
