@@ -25,13 +25,12 @@ load_dotenv()
 # ======================
 # Streamlit config
 # ======================
-
-
 st.set_page_config(
     page_title="Home Repair Helper",
     page_icon="🛠️",
     layout="wide",
 )
+
 
 #BUCKET_MODEL = "gpt-4o-mini"
 BUCKET_MODEL = "gpt-4.1-mini"
@@ -41,7 +40,7 @@ st.markdown("""
 <style>
 /* Load fonts FIRST - must be at top */
 @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* Control top spacing and page width */
 .block-container {
@@ -65,9 +64,16 @@ st.markdown("""
     margin-top: 2rem !important;
 }
 
-/* Apply Manrope to most UI text */
+/* Apply Inter to most UI text */
 html, body, div, span, input, textarea, button, select, label, p, li, ul, ol, [class], * {
-    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+            
+p, li {
+    font-weight: 400 !important;
+    line-height: 1.65 !important;
+    letter-spacing: 0.003em;
+    color: #1F2937 !important;
 }
 
 /* Improve default text rendering */
@@ -153,9 +159,9 @@ h3 {
 }
 
 /* ===== BACKGROUND COLORS ===== */
-/* Make app background pure white */
+/* Make app background pure white. Switch back to FAFAFA later*/
 .stApp {
-    background-color: #FAFAFA !important;
+    background-color: #FFFFFF !important;
 }
 
 
@@ -319,7 +325,7 @@ select:hover {
 }
 
 /* Focus ring (click + keyboard) */
-[data-testid="stTextInput"] input:focus,
+/* [data-testid="stTextInput"] input:focus,
 [data-testid="stTextArea"] textarea:focus,
 [data-testid="stNumberInput"] input:focus,
 [data-testid="stDateInput"] input:focus,
@@ -327,7 +333,7 @@ select:hover {
     outline: none !important;
     border-color: #420741 !important;
     box-shadow: 0 0 0 3px rgba(66, 7, 65, 0.18) !important;
-}
+} */
 
 /* BaseWeb focus states for select/multiselect */
 [data-testid="stSelectbox"] [data-baseweb="select"] > div:focus-within,
@@ -416,6 +422,123 @@ samp {
     margin: 0 0 0.75rem 0;
     color: #0F172A;
 }
+            
+/* ========== HOME CHAT BOT ===========*/
+/* --- Home chat container --- */
+.home-chat-box {
+  background-color: #f8fafc;          /* very light neutral */
+  border: 1px solid #e5e7eb;           /* subtle outline */
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0 1.5rem 0;
+}
+
+/* Slightly tighten spacing inside */
+.home-chat-box .chat-row:last-child {
+  margin-bottom: 0;
+}
+
+/* --- Home chat (label-based, no avatars) --- */
+
+.chat-row {
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
+
+.chat-label {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.chat-user .chat-label {
+  color: #475569; /* neutral gray */
+}
+
+.chat-assistant .chat-label {
+  color: #420741; /* your purple */
+}
+
+.chat-text {
+  white-space: pre-wrap;
+}
+            
+/* --- Home chat input: match app field styling --- */
+
+/* ===== Text inputs/areas: single focus border (BaseWeb) ===== */
+
+/* Base state (border lives on base-input wrapper) */
+[data-testid="stTextInput"] div[data-baseweb="base-input"],
+[data-testid="stTextArea"]  div[data-baseweb="base-input"] {
+  border: 1px solid #CBD5E1 !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Remove any focus ring from the OUTER wrapper (prevents double border) */
+[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within,
+[data-testid="stTextArea"]  div[data-baseweb="textarea"]:focus-within {
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: transparent !important;
+}
+
+/* Focus ring ONLY on inner base-input wrapper */
+/* Focus: thicker, softer purple border ONLY (no ring) */
+[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within div[data-baseweb="base-input"],
+[data-testid="stTextArea"]  div[data-baseweb="textarea"]:focus-within div[data-baseweb="base-input"] {
+  border-color: #6b3a6e !important;   /* lighter, softer purple */
+  border-width: 2px !important;      /* thicker border */
+  box-shadow: none !important;       /* no ring */
+}
+
+
+/* Kill ALL inner input/textarea borders + focus visuals */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+            
+/* ===== Chat input: single border (non-BaseWeb) ===== */
+
+/* Border lives on OUTER wrapper */
+[data-testid="stChatInput"] > div {
+  border: 1px solid #CBD5E1 !important;
+  border-radius: 999px !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important;
+  padding: 0.15rem 0.35rem !important;
+}
+
+/* Hover */
+[data-testid="stChatInput"] > div:hover {
+  border-color: #94A3B8 !important;
+}
+
+/* Focus: single thicker border, no ring */
+[data-testid="stChatInput"] > div:focus-within {
+  border-color: #6b3a6e !important;   /* matches your purple */
+  border-width: 2px !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Kill ALL inner textarea borders */
+[data-testid="stChatInput"] textarea {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Placeholder */
+[data-testid="stChatInput"] textarea::placeholder {
+  color: #94A3B8;
+}
+
+            
+</style>
 """, unsafe_allow_html=True)
 
 
@@ -1061,6 +1184,51 @@ def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_n
         + "\n=========================================================="
     )
 
+
+# ======================
+# HOME AI CHAT PROMPT
+# ======================
+
+def build_home_assistant_system_prompt() -> str:
+    return """
+You are the Home page assistant for a homeowner-facing contractor app.
+Your job is to orient the user and recommend ONE best starting tool.
+
+TOOLS (recommend only one per message):
+1) Estimate Explainer — explains insurance/contractor estimate line items in plain language.
+2) Renovation Plan — explains typical sequence of repairs and what happens when.
+3) Design Helper — helps with design/material decisions using photos and descriptions.
+
+DEFAULT START:
+- If the user is unsure where to begin, or the question is broad/overwhelmed, default to:
+  **Estimate Explainer** (it’s usually the best first anchor).
+
+RESPONSE SHAPE:
+- 4–6 short lines total (friendly, not robotic).
+- Start with a brief empathy/acknowledgement (1 sentence).
+- Then recommend ONE tool using this pattern:
+  “People usually start by X. The [Tool Name] is the best place to begin.”
+- Then include “To use it well:” with 1–3 practical points.
+- End with one gentle next step that explains what the user will do *in that tool*.
+  (Example: what they’ll upload or describe once they open that tab.)
+
+
+HARD LIMITS:
+- You do NOT perform any work inside the Home chat.
+- You must NEVER ask the user to upload, paste, or enter information "here" or "in this chat".
+- All actions (uploading, pasting, describing details) happen ONLY inside the specific tool tabs.
+- When suggesting next steps, ALWAYS refer to the tool by name and direct the user to that tab.
+
+- Do NOT provide step-by-step professional advice, pricing judgments, or code/legal guidance.
+- If the user asks detailed questions, redirect to ONE tool and explain what they’ll do *there*.
+- If the question spans multiple stages, you may mention a typical flow in ONE sentence,
+  but you MUST end with ONE clear starting tool recommendation.
+- Never list multiple tools as options and never ask the user to choose.
+
+TONE:
+- Warm, calm, supportive. Plain language. No lecturing.
+- Avoid sounding like a chatbot. No overconfidence.
+""".strip()
 
 
 # ======================
@@ -2739,6 +2907,11 @@ def main():
         st.markdown("<div class='lang-label'>Preferred language</div>", unsafe_allow_html=True)
         preferred_lang = get_preferred_language()
 
+    if "home_messages" not in st.session_state:
+        st.session_state.home_messages = []  # list of dicts: {"role": "user"/"assistant", "content": "..."}
+    if "home_turn_count" not in st.session_state:
+        st.session_state.home_turn_count = 0  # number of user messages on Home
+
     # HARD break between header and tabs (this is important)
     st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
@@ -2752,37 +2925,23 @@ def main():
 
 # ---------- HOME TAB ----------
     with tabs[0]:
-        # Strong HOME-PAGE Disclaimer (only in HOME tab)
-        if preferred_lang["code"] == "es":
-            st.markdown("""
-            <div class="disclaimer-box">
-            Esta herramienta en versión beta solo proporciona información educativa general 
-            y puede estar incompleta o contener errores. No ofrece asesoría profesional en 
-            seguros, asuntos legales, construcción, seguridad ni diseño. Todas las decisiones 
-            finales deben basarse en la guía de su contratista con licencia, diseñador, 
-            ajustador de seguros y en los códigos de construcción y documentos de póliza aplicables.
-            </div>
-            """, unsafe_allow_html=True)
-
-        else:
-            st.markdown("""
-            <div class="disclaimer-box">
-            This beta tool provides general educational information only and may be incomplete or 
-            incorrect. It does not provide professional insurance, legal, construction, safety, or 
-            design advice. All final decisions must be based on the guidance of your licensed contractor, 
-            designer, insurance adjuster, and applicable building codes and policy documents.
-            </div>
-            """, unsafe_allow_html=True)
 
         st.markdown("## Welcome")
-        st.write(
-            "This app is designed to help you understand your home repair project at every stage. "
-            "Use the tabs above to explore your insurance estimate, see how repairs typically unfold, "
-            "and review design considerations—so you can stay informed and prepared."
-        )
+
+        if preferred_lang["code"] == "es":
+            st.write(
+                "Esta aplicación tiene 3 herramientas principales, cada una disponible en las pestañas de arriba. "
+                "A continuación se presenta una breve descripción de cada herramienta. "
+                "La información es de carácter general y debe confirmarse con tu contratista o ajustador de seguros."
+            )
+        else:
+            st.write(
+                "This app has 3 main tools, each found in the tabs above. "
+                "Here's a short description of each tool. "
+                "The information provided is general guidance and should be confirmed with your contractor or insurance adjuster."
+            )
 
         st.markdown("""
-### Use the tabs above to choose one of these tools:
 
 1. **Estimate Explainer**  
    Upload your insurance estimate (and optionally your contractor's estimate) to see
@@ -2796,6 +2955,121 @@ def main():
    Describe your wall colors, nearby finishes, and preferences to get a few
    possible directions for materials and colors.
 """)
+        
+        st.markdown("## Not sure where to begin?")
+
+        if preferred_lang["code"] == "es":
+            st.write(
+                "Describe lo que estás tratando de resolver y te indicaré el mejor lugar para comenzar."
+            )
+        else:
+            st.write(
+                "Describe what you’re dealing with, and I’ll point you to the best place to start."
+            )
+
+        # --- HOME assistant chat state ---
+        if "home_messages" not in st.session_state:
+            st.session_state.home_messages = []  # [{"role": "user"/"assistant", "content": str}]
+        if "home_turn_count" not in st.session_state:
+            st.session_state.home_turn_count = 0
+
+        if st.session_state.home_messages:
+            chat_box = st.container(border=True)
+
+            with chat_box:
+                # Render conversation so far
+                for msg in st.session_state.home_messages:
+                    if msg["role"] == "user":
+                        st.markdown(
+                            f"""
+                            <div class="chat-row chat-user">
+                            <span class="chat-label">Me:</span>
+                            <span class="chat-text">{msg["content"]}</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            f"""
+                            <div class="chat-row chat-assistant">
+                            <span class="chat-label">You:</span>
+                            <span class="chat-text">{msg["content"]}</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+
+        # Chat input (first question + follow-ups)
+        placeholder = (
+            "Describe en una frase qué estás tratando de resolver (y te diré por dónde empezar)…"
+            if preferred_lang["code"] == "es"
+            else "In one sentence, describe what you’re trying to figure out (and I’ll suggest where to start)…"
+        )
+
+        MAX_HOME_TURNS = 3
+
+        user_text = ""
+        submitted = False
+
+        if st.session_state.home_turn_count >= MAX_HOME_TURNS:
+            if preferred_lang["code"] == "es":
+                st.caption("Este chat en la página de inicio está limitado a 3 preguntas para mantenerlo rápido. (Luego agregaremos un botón de reinicio.)")
+            else:
+                st.caption("This Home chat is limited to 3 questions to keep it quick. (We’ll add a reset button later.)")
+        else:
+            disabled = st.session_state.home_turn_count >= MAX_HOME_TURNS
+
+            user_text = st.chat_input(
+                placeholder,
+                disabled=disabled,
+            )
+
+        if user_text and user_text.strip():
+            user_text = user_text.strip()
+            st.session_state.home_messages.append({"role": "user", "content": user_text})
+            st.session_state.home_turn_count += 1
+
+            with st.spinner("Thinking..."):
+                system_prompt = build_home_assistant_system_prompt()
+
+                # Build a compact conversation transcript for context
+                convo_lines = []
+                for m in st.session_state.home_messages:
+                    role = "User" if m["role"] == "user" else "Assistant"
+                    convo_lines.append(f"{role}: {m['content']}")
+
+                convo_text = "\n".join(convo_lines[-8:])  # small cap (plenty for 3 turns)
+
+                user_content = f"""
+            You are chatting on the Home page of the app.
+
+            CONVERSATION SO FAR:
+            {convo_text}
+
+            Now respond as the Home assistant. Remember: suggest ONE best starting tool.
+            """.strip()
+
+                assistant_en = call_gpt(
+                    system_prompt=system_prompt,
+                    user_content=user_content,
+                    model=BUCKET_MODEL,          # cheap + fast is fine for orientation
+                    temperature=0.4,
+                    max_output_tokens=320,
+                ).strip()
+
+                assistant_text = assistant_en
+                if preferred_lang["code"] == "es":
+                    assistant_es = translate_if_needed(assistant_en, "es")
+                    if assistant_es:
+                        assistant_text = assistant_es.strip()
+
+            st.session_state.home_messages.append({"role": "assistant", "content": assistant_text})
+            st.rerun()
+
+
+
 
         # FOOTER - add here, at the end of HOME tab content
         st.markdown("<hr style='margin-top: 3rem; margin-bottom: 2rem; border-color: #E2E8F0;'>", unsafe_allow_html=True)

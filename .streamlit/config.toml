@@ -2,7 +2,7 @@
 base = "light"
 
 # Apple-style blue
-primaryColor = "#007AFF"
+primaryColor = "#420741"
 
 # Soft light-blue-tinted background
 backgroundColor = "#F5F7FB"
