@@ -26,7 +26,7 @@ load_dotenv()
 # Streamlit config
 # ======================
 st.set_page_config(
-    page_title="Home Repair Helper",
+    page_title="NextStep Home",
     page_icon="🛠️",
     layout="wide",
 )
@@ -433,8 +433,8 @@ samp {
 /* ========== HOME CHAT BOT ===========*/
 /* --- Home chat container --- */
 .home-chat-box {
-  background-color: #f8fafc;          /* very light neutral */
-  border: 1px solid #e5e7eb;           /* subtle outline */
+  background-color: #FCFCFD;   /* almost page white */
+  border: 1px solid #E5E7EB;
   border-radius: 10px;
   padding: 1rem 1.25rem;
   margin: 1rem 0 1.5rem 0;
@@ -445,28 +445,32 @@ samp {
   margin-bottom: 0;
 }
 
-/* --- Home chat (label-based, no avatars) --- */
+/* --- Home chat (label + indented text) --- */
 
 .chat-row {
-  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
   line-height: 1.4;
 }
 
 .chat-label {
+  flex: 0 0 72px;          /* adjust to fit "NextStep:" */
   font-weight: 600;
-  margin-right: 0.25rem;
+  margin-right: 0.5rem;
 }
 
 .chat-user .chat-label {
-  color: #475569; /* neutral gray */
+  color: #475569;          /* neutral gray */
 }
 
 .chat-assistant .chat-label {
-  color: #420741; /* your purple */
+  color: #420741;          /* purple */
 }
 
 .chat-text {
-  white-space: pre-wrap;
+  flex: 1;
+  white-space: pre-wrap;  /* KEEP this — preserves <br> behavior */
 }
             
 /* --- Home chat input: match app field styling --- */
@@ -542,6 +546,11 @@ samp {
 /* Placeholder */
 [data-testid="stChatInput"] textarea::placeholder {
   color: #94A3B8;
+}
+            
+.chat-divider {
+    margin: 0.75rem 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
             
@@ -1198,44 +1207,54 @@ def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_n
 
 def build_home_assistant_system_prompt() -> str:
     return """
-You are the Home page assistant for a homeowner-facing contractor app.
-Your job is to orient the user and recommend ONE best starting tool.
+You are the Home Page Assistant for a homeowner-facing contractor app.
+
+Your goal:
+1) Give a brief, helpful, general answer to the user’s question (high-level, non-technical).
+2) Then recommend exactly ONE best tool tab to continue for tailored, detailed help.
 
 TOOLS (recommend only one per message):
 1) Estimate Explainer — explains insurance/contractor estimate line items in plain language.
-2) Renovation Plan — explains typical sequence of repairs and what happens when.
+2) Renovation Plan — explains typical repair sequence, timing, and what happens when.
 3) Design Helper — helps with design/material decisions using photos and descriptions.
 
 DEFAULT START:
-- If the user is unsure where to begin, default to:
-  **Estimate Explainer** (it’s usually the best first anchor).
+- If the user is unsure where to begin, default to: Estimate Explainer (best first anchor).
 
-RESPONSE SHAPE:
-- 4–6 short lines total (friendly, not robotic).
-- Start with a brief empathy/acknowledgement (1 sentence).
-- Then recommend ONE tool, which best fits the user's input, using this pattern:
-  “People often start by X. The [Tool Name] is the best place to begin.”
-- Then include “To use it well:” with 1–3 practical points.
-- End with one gentle next step that explains what the user will do *in that tool*.
-  (Example: what they’ll upload or describe once they open that tab.)
+WHAT YOU MAY DO ON HOME CHAT:
+- Provide general orientation, definitions, and “what’s typical” at a high level.
+- Offer 1–2 practical considerations or pitfalls to watch for (non-binding).
+- Ask at most ONE lightweight clarifying question ONLY if it changes which tool you recommend.
+  (Do not ask for documents, photos, uploads, or long details here.)
 
-
-HARD LIMITS:
-- You do NOT perform any work inside the Home chat.
-- You must NEVER ask the user to upload, paste, or enter information "here" or "in this chat".
-- All actions (uploading, pasting, describing details) happen ONLY inside the specific tool tabs.
-- When suggesting next steps, ALWAYS refer to the tool by name and direct the user to that tab.
-
-- Do NOT provide step-by-step professional advice, pricing judgments, or code/legal guidance.
-- If the user asks detailed questions, redirect to ONE tool and explain what they’ll do *there*.
-- If the question spans multiple stages, you may mention a typical flow in ONE sentence,
-  but you MUST end with ONE clear starting tool recommendation.
+WHAT YOU MUST NOT DO ON HOME CHAT:
+- Do not perform the tool’s work (no line-item interpretation from an estimate, no full repair plan, no design specs).
+- Never ask the user to upload/paste/enter files or details “here” or “in this chat.”
+- All actions (uploading, pasting, describing details) happen ONLY inside the specific tool tab you recommend.
+- Do not give step-by-step professional instructions, pricing judgments, or legal/code guidance.
 - Never list multiple tools as options and never ask the user to choose.
 
+RESPONSE FORMAT (4–7 short lines, friendly and natural):
+1) Acknowledge/empathy (1 sentence).
+2) “Quick help:” 1–3 short bullets with general guidance that answers the user’s immediate question.
+   - Keep it generic and safe. No numbers/estimates. No authoritative claims.
+3) Recommend ONE tool using this exact pattern:
+   “Next step: People often start by X. The [Tool Name] is the best place to begin.”
+4) “In that tab, you’ll:” 1–2 bullets describing what they will do THERE (upload/paste/describe details there).
+5) End with one gentle action sentence directing them to open that tab.
+
+ROUTING RULES:
+- Mentions of “estimate,” “insurance,” “line items,” “scope,” “RCV/ACV,” “depreciation,” “deductible,” “invoice” → Estimate Explainer.
+- Mentions of “timeline,” “sequence,” “what happens first,” “demo/drywall/paint/flooring,” “how long,” “steps” → Renovation Plan.
+- Mentions of “colors,” “materials,” “tile,” “flooring,” “cabinets,” “style,” “matching,” “photos,” “design choices” → Design Helper.
+- If the question spans multiple stages, you may mention a typical flow in ONE short sentence,
+  but you MUST end with ONE clear starting tool recommendation.
+
 TONE:
-- Warm, calm, supportive. Plain language. No lecturing.
-- Avoid sounding like a chatbot. No overconfidence.
+- Warm, calm, supportive. Plain language. No lecturing. Don’t sound like a chatbot.
+- Avoid overconfidence; use softeners like “typically,” “often,” “in many cases.”
 """.strip()
+
 
 
 # ======================
@@ -2980,41 +2999,52 @@ def main():
         if "home_turn_count" not in st.session_state:
             st.session_state.home_turn_count = 0
 
-        if st.session_state.home_messages:
-            chat_box = st.container(border=True)
+        import html
 
-            with chat_box:
-                # Render conversation so far
-                for msg in st.session_state.home_messages:
-                    if msg["role"] == "user":
-                        st.markdown(
-                            f"""
-                            <div class="chat-row chat-user">
-                            <span class="chat-label">Me:</span>
-                            <span class="chat-text">{msg["content"]}</span>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        # Match the rendering style used in other tabs (convert \n to <br>)
-                        safe_content = html.escape(msg["content"]).replace("\n", "<br>")
-                        st.markdown(
-                            f"""
-                            <div class="chat-row chat-assistant">
-                            <span class="chat-label">You:</span>
-                            <span class="chat-text">{safe_content}</span>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+        def render_home_chat(messages):
+            parts = []
+            parts.append('<div class="home-chat-box">')
+
+            first_user_msg = True
+            for msg in messages:
+                role = msg.get("role")
+                content = msg.get("content", "")
+
+                if role == "user":
+                    if not first_user_msg:
+                        parts.append('<div class="chat-divider"></div>')
+                    first_user_msg = False
+
+                    user_safe = html.escape(content)
+                    parts.append(
+                        f'<div class="chat-row chat-user">'
+                        f'<span class="chat-label">You:</span>'
+                        f'<span class="chat-text"><strong>{user_safe}</strong></span>'
+                        f'</div>'
+                    )
+                else:
+                    assistant_safe = html.escape(content).replace("\n", "<br>")
+                    parts.append(
+                        f'<div class="chat-row chat-assistant">'
+                        f'<span class="chat-label">NextStep:</span>'
+                        f'<span class="chat-text">{assistant_safe}</span>'
+                        f'</div>'
+                    )
+
+            parts.append("</div>")
+
+            st.markdown("".join(parts), unsafe_allow_html=True)
+
+        # usage
+        if st.session_state.home_messages:
+            render_home_chat(st.session_state.home_messages)
 
 
         # Chat input (first question + follow-ups)
         placeholder = (
-            "Describe en una frase qué estás tratando de resolver (y te diré por dónde empezar)…"
+            "¿Qué estás tratando de resolver?"
             if preferred_lang["code"] == "es"
-            else "In one sentence, describe what you’re trying to figure out (and I’ll suggest where to start)…"
+            else "What are you trying to figure out?"
         )
 
         MAX_HOME_TURNS = 3
@@ -3037,64 +3067,69 @@ def main():
                 disabled=False,
             )
 
+        # --- Spinner placeholder (above Start over) ---
+        spinner_slot = st.empty()
+
         # --- Clear chat button (ONLY after chat has started) ---
         if st.session_state.home_messages:
             clear_col, _ = st.columns([1, 6])
             with clear_col:
-                if st.button("Start over", type="secondary"):
+                if st.button("Clear chat", type="secondary"):
                     st.session_state.home_messages = []
                     st.session_state.home_turn_count = 0
                     st.rerun()
-
 
         if user_text and user_text.strip():
             user_text = user_text.strip()
             st.session_state.home_messages.append({"role": "user", "content": user_text})
             st.session_state.home_turn_count += 1
 
-            with st.spinner("Thinking..."):
-                system_prompt = build_home_assistant_system_prompt()
+            with spinner_slot:
+                with st.spinner("Thinking..."):
+                    system_prompt = build_home_assistant_system_prompt()
 
-                # Build a compact conversation transcript for context
-                convo_lines = []
-                for m in st.session_state.home_messages:
-                    role = "User" if m["role"] == "user" else "Assistant"
-                    convo_lines.append(f"{role}: {m['content']}")
+                    # Build a compact conversation transcript for context
+                    convo_lines = []
+                    for m in st.session_state.home_messages:
+                        role = "User" if m["role"] == "user" else "Assistant"
+                        convo_lines.append(f"{role}: {m['content']}")
 
-                convo_text = "\n".join(convo_lines[-8:])  # small cap (plenty for 3 turns)
+                    convo_text = "\n".join(convo_lines[-8:])  # small cap (plenty for 3 turns)
 
-                user_content = f"""
-            You are chatting on the Home page of the app.
+                    user_content = f"""
+        You are chatting on the Home page of the app.
 
-            CONVERSATION SO FAR:
-            {convo_text}
+        CONVERSATION SO FAR:
+        {convo_text}
 
-            Now respond as the Home assistant. Remember: suggest ONE best starting tool.
-            """.strip()
+        Now respond as the Home assistant. Remember: suggest ONE best starting tool.
+        """.strip()
 
-                assistant_en = call_gpt(
-                    system_prompt=system_prompt,
-                    user_content=user_content,
-                    model=BUCKET_MODEL,          # cheap + fast is fine for orientation
-                    temperature=0.4,
-                    max_output_tokens=320,
-                ).strip()
+                    assistant_en = call_gpt(
+                        system_prompt=system_prompt,
+                        user_content=user_content,
+                        model=BUCKET_MODEL,          # cheap + fast is fine for orientation
+                        temperature=0.4,
+                        max_output_tokens=320,
+                    ).strip()
 
-                assistant_text = assistant_en
-                if preferred_lang["code"] == "es":
-                    assistant_es = translate_if_needed(assistant_en, "es")
-                    if assistant_es:
-                        assistant_text = assistant_es.strip()
+                    assistant_text = assistant_en
+                    if preferred_lang["code"] == "es":
+                        assistant_es = translate_if_needed(assistant_en, "es")
+                        if assistant_es:
+                            assistant_text = assistant_es.strip()
 
-                # Normalize line endings
-                text = assistant_text.strip().replace("\r\n", "\n").replace("\r", "\n")
+                    # Normalize line endings
+                    text = assistant_text.strip().replace("\r\n", "\n").replace("\r", "\n")
 
-                # Collapse any runs of blank lines down to a single blank line
-                text = re.sub(r"\n\n+", "\n\n", text)
+                    # Collapse any runs of blank lines down to a single blank line
+                    text = re.sub(r"\n\n+", "\n\n", text)
 
-                # Treat each remaining newline as a paragraph break (1 blank line)
-                lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
-                assistant_text = "\n\n".join(lines)
+                    # Treat each remaining newline as a paragraph break (1 blank line)
+                    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+                    assistant_text = "\n\n".join(lines)
+
+            spinner_slot.empty()  # optional: collapses slot immediately (before rerun)
 
             st.session_state.home_messages.append({"role": "assistant", "content": assistant_text})
             st.rerun()
