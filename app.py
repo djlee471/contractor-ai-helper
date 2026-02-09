@@ -1914,7 +1914,7 @@ CRITICAL RULE:
         st.markdown("#### Follow-up question about this explanation")
 
         follow_q = st.text_input(
-            "Follow-up question",
+            "",
             key="estimate_followup_input",
             placeholder="If you want more detail about something above, type your question here."
         )
@@ -2391,7 +2391,7 @@ EXTRA NOTES:
         st.markdown("#### Follow-up question about this plan")
 
         follow_q_reno = st.text_input(
-            "Follow-up question",
+            "",
             key="reno_followup_input",
             placeholder="If you want more detail about the sequence or timeline, type your question here."
         )
@@ -2822,7 +2822,7 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
         st.markdown("#### Follow-up question about these design suggestions")
 
         follow_q_design = st.text_input(
-            "Follow-up question",
+            "",
             key="design_followup_input",
             placeholder="If you want to explore specific color combinations or materials further, type your question here."
         )
