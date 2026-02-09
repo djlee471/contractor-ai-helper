@@ -1120,14 +1120,16 @@ def extract_key_numbers_from_text(extracted_text: str) -> Dict[str, str]:
     """
     Extract key summary numbers from estimate text.
     Only returns values that are explicitly labeled in the text.
+
     Output keys are human-facing labels:
       - Replacement Cost Value (RCV)
       - Actual Cash Value (ACV)
       - Depreciation
       - Deductible
-      - Net Payment
       - Overhead & Profit
       - Sales Tax
+      - Net Claim
+      - Net Payment   (ONLY if payment language is explicitly present)
     """
     if not extracted_text:
         return {}
@@ -1135,16 +1137,36 @@ def extract_key_numbers_from_text(extracted_text: str) -> Dict[str, str]:
     lines = [ln.strip() for ln in extracted_text.splitlines() if ln.strip()]
     out: Dict[str, str] = {}
 
-    # label patterns (case-insensitive); we only capture if line also has a money token
+    # -----------------------------
+    # Label patterns (case-insensitive)
+    # -----------------------------
+    # IMPORTANT: Keep Net Claim and Net Payment separate.
+    # - "Net Claim" stays "Net Claim"
+    # - "Net Payment" ONLY when explicit payment language exists
     patterns = [
         (re.compile(r"\b(replacement cost value|rcv)\b", re.I), "Replacement Cost Value (RCV)"),
         (re.compile(r"\b(actual cash value|acv)\b", re.I), "Actual Cash Value (ACV)"),
         (re.compile(r"\bdepreciation\b", re.I), "Depreciation"),
         (re.compile(r"\bdeductible\b", re.I), "Deductible"),
-        (re.compile(r"\bnet\b.*\b(payment|claim)\b|\btotal\b.*\bnet\b", re.I), "Net Payment"),
-        (re.compile(r"\b(overhead\s*&\s*profit|o\s*&\s*p|overhead and profit)\b", re.I), "Overhead & Profit"),
-        (re.compile(r"\b(sales\s*tax|tax)\b", re.I), "Sales Tax"),
+
+        # Net Claim (explicit claim language)
+        (re.compile(r"\bnet\b.*\bclaim\b", re.I), "Net Claim"),
+
+        # Net Payment (explicit payment language only)
+        (re.compile(r"\bnet\b.*\b(payment|paid|check|disbursement)\b", re.I), "Net Payment"),
+
+        # Overhead & Profit: require explicit O&P wording (do NOT match "Line Item Totals")
+        (re.compile(r"\b(overhead\s*&\s*profit|overhead\s+and\s+profit|\bo\s*&\s*p\b)\b", re.I), "Overhead & Profit"),
+
+        # Sales Tax: only match if "sales tax" appears (avoid generic "tax" lines like recap/total tax)
+        (re.compile(r"\bsales\s*tax\b", re.I), "Sales Tax"),
     ]
+
+    # Skip lines that often contain amounts but are NOT the key numbers we want
+    skip_rx = re.compile(
+        r"\b(page|subtotal by room|totals:|line item totals|labor minimums applied|recap of taxes)\b",
+        re.I,
+    )
 
     # We’ll take the LAST matching occurrence (often the most final summary)
     for line in lines:
@@ -1152,13 +1174,11 @@ def extract_key_numbers_from_text(extracted_text: str) -> Dict[str, str]:
         if not any(ch.isdigit() for ch in line):
             continue
 
-        amt = _money_from_line(line)
-        if not amt:
+        if skip_rx.search(line):
             continue
 
-        # ignore lines that are clearly not summary key numbers
-        # (you can expand this list if needed)
-        if re.search(r"\b(page|line item|subtotal by room|totals:)\b", line, re.I):
+        amt = _money_from_line(line)
+        if not amt:
             continue
 
         for rx, label in patterns:
@@ -1167,7 +1187,6 @@ def extract_key_numbers_from_text(extracted_text: str) -> Dict[str, str]:
                 break
 
     return out
-
 
 
 def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_name: str) -> str:
@@ -1182,6 +1201,7 @@ def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_n
         "Deductible",
         "Overhead & Profit",
         "Sales Tax",
+        "Net Claim",
         "Net Payment",
     ]
 
@@ -1199,7 +1219,6 @@ def build_key_numbers_block(key_numbers: Dict[str, str], *, doc_role: str, doc_n
         + "\n".join(lines)
         + "\n=========================================================="
     )
-
 
 # ======================
 # HOME AI CHAT PROMPT
@@ -1292,7 +1311,8 @@ DOCUMENT READING:
   - Unit prices (e.g. $/sq ft)
   - Subtotals, taxes, depreciation
   - Overhead & profit (O&P)
-  - Deductible and net payment amounts
+  - Deductible, depreciation, and payment amounts ONLY if explicitly shown
+- If deductible or depreciation are not shown, do NOT assume they are zero.
 - ONLY say that the text is unreadable if it is truly empty or clearly not an estimate.
 - Do NOT say things like "the text you provided is not in a readable format"
   if any real estimate text is present.
@@ -1324,7 +1344,7 @@ MATERIAL TOTALS (CRITICAL):
   - Include the exact computed total for each category if provided.
   - Describe what the category typically includes (removal, pad, labor, transitions, etc.).
   - Do NOT add, change, or adjust dollar amounts.
-  - Use human-read understandable labels for each material (no snake_underscore material labels)
+  - Use human-readable, homeowner-friendly labels for each material.
 - If a material category is discussed but no computed total is provided:
   - Say "No computed total found for [material]".
   - Suggest a neutral follow-up question.
@@ -1354,9 +1374,15 @@ KEY NUMBERS (CRITICAL):
 - Only state key numbers that appear in this block.
 - If the block is not present, say key numbers were not found and do not guess.
 
+IMPORTANT CLARIFICATION (PAYMENT VS CLAIM VALUE):
+- Some estimates list Replacement Cost Value (RCV) and/or Net Claim.
+- These represent estimate or claim values, not confirmed insurance payments.
+- Only treat something as a payment if the estimate explicitly uses payment language
+  such as "Payment", "Paid", "Check", or "Disbursement".
+- Do NOT assume that Net Claim or RCV equals the insurer's payout.
+
 FORMATTING (IMPORTANT):
 - Avoid using bold or italics around numeric amounts.
-  (Do not write **$1,622**.)
 - When explaining what a cost includes, put the explanation on a new line.
   Example:
   Total carpet cost: $1,628.89
@@ -1367,6 +1393,13 @@ USER QUESTIONS OR CONTEXT:
 - Always provide a complete high-level explanation first.
 - If the user provided questions, address them in a dedicated section titled:
   "Addressing Your Specific Questions".
+
+PAYMENT QUESTIONS:
+- If the user asks how much insurance is paying or covering:
+  - If the estimate does not explicitly show a payment line
+    (Payment / Paid / Check / Disbursement) and does not show deductible or depreciation,
+    explain that the estimate shows repair value and the actual payout cannot be determined
+    from this estimate alone.
 
 HARD RULES:
 - You are NOT a lawyer, insurance adjuster, or contractor.
@@ -1388,13 +1421,13 @@ OUTPUT STYLE (IMPORTANT):
 - Section headings MUST be bolded using **double asterisks**.
 - Do NOT use Markdown headings (##, ###).
 - Do NOT use bullet characters such as "-", "*", or "•".
-- Do NOT use backticks (`) or fenced code blocks.
+- Do NOT use backticks or fenced code blocks.
 - Do NOT italicize text.
 - Do NOT apply bold formatting to numeric amounts.
 - Use line breaks for readability.
 - Do NOT indent with dashes or symbols.
-- Do NOT output any HTML or XML tags (no <div>, <span>, <br>, etc.).
-- Do NOT use angle brackets < or > anywhere in the output.
+- Do NOT output any HTML or XML tags.
+- Do NOT use angle brackets anywhere in the output.
 
 SPACING RULES:
 - After every bold section heading, insert exactly one blank line before the paragraph text.
@@ -1415,35 +1448,35 @@ EXPLANATION LIST RULE (IMPORTANT):
   - Do NOT combine multiple categories into a single paragraph.
   - Do NOT use bullets or numbering.
 
-
 OUTPUT FORMAT (English):
 - Short introductory orientation.
   * Provide room totals, each room on a separate line.
 
 - "What’s Driving Cost in This Estimate"
-  * Start with a one-sentence opener like: "Here are the main tasks and materials driving your costs."
-  * List major material category in decending order by total cost.
+  * Start with a one-sentence opener that explains that each category total includes
+    the main work plus common related items required to complete it
+    (prep, installation materials, and associated labor).
+  * List major material categories in descending order by total cost.
   * For each category:
     * Start a new paragraph.
-    * Begin with: Material category Name: $Exact Amount
-    * For category name, use natural, homeowner-friendly labels with no underscores and Capitalized first letter.
+    * Begin with: Material category name: $Exact Amount
     * Follow with one sentence explaining what that category typically includes.
   * Insert one blank line between categories.
-  * Do not combine categories into the same paragraph.
 
 - "Key Numbers From Your Estimate"
-  * List each category from the Key numbers block on a separate line. Includes things like the following:
-    * Replacement Cost Value (RCV), if clearly present
+  * List each category from the Key Numbers block on a separate line.
+    * Replacement Cost Value (RCV), if present
     * Deductible, if present
-    * Net payment, if present
+    * Net claim (estimate value), if present
+    * Net payment (only if explicitly labeled as a payment), if present
     * General Contractor Overhead & Profit, if present
     * Material sales tax, if significant
 
 - If applicable: "Addressing Your Specific Questions"
 
-- "Questions to Ask Your Adjuster" (2-3)
+- "Questions to Ask Your Adjuster" (2–3)
 
-- "Questions to Ask Your Contractor" (2-3)
+- "Questions to Ask Your Contractor" (2–3)
 
 - End with a short reminder that this is general information only.
 """.strip()
@@ -1833,9 +1866,71 @@ CRITICAL RULE:
 
 
     # Display explanation (outside button block)
-    explanation = st.session_state.get("estimate_explanation_en", "")
 
-    if explanation.strip():
+    # =========================
+    # DEBUG: Bucket inspection
+    # =========================
+    explanation = st.session_state.get("estimate_explanation_en", "").strip()
+    # docs = st.session_state.get("material_totals_by_doc", [])
+
+    # if explanation and docs:
+    #     with st.expander("Debug: inspect which lines went into each bucket"):
+    #         st.caption("Shows the largest atomic line items inside selected buckets, per document.")
+
+    #         bucket_to_inspect = st.selectbox(
+    #             "Which bucket do you want to inspect?",
+    #             ["tile", "flooring_hard"],
+    #             index=0,
+    #             key="debug_bucket_inspect",
+    #         )
+
+    #         doc_labels = [f"{d['role'].upper()} — {d['name']}" for d in docs]
+    #         doc_idx = st.selectbox(
+    #             "Which document?",
+    #             list(range(len(doc_labels))),
+    #             format_func=lambda i: doc_labels[i],
+    #             index=0,
+    #             key="debug_doc_select",
+    #         )
+
+    #         chosen = docs[doc_idx]
+    #         grouped = chosen["result"].get("grouped", {})
+    #         lines = grouped.get(bucket_to_inspect, [])
+
+    #         if not lines:
+    #             st.warning(f"No atomic lines found in bucket '{bucket_to_inspect}' for this document.")
+    #         else:
+    #             # Optional filter (helps spot mis-bucketed stuff fast)
+    #             q = st.text_input("Filter by keyword (optional)", key="debug_bucket_filter").strip().lower()
+    #             view_lines = [ml for ml in lines if q in ml.text.lower()] if q else lines
+
+    #             top_n = 25
+    #             top_lines = sorted(view_lines, key=lambda ml: ml.amount, reverse=True)[:top_n]
+
+    #             from decimal import Decimal
+    #             top_sum = sum((ml.amount for ml in top_lines), Decimal("0.00"))
+    #             bucket_sum = sum((ml.amount for ml in view_lines), Decimal("0.00"))
+
+    #             c1, c2 = st.columns(2)
+    #             c1.metric(f"Sum of top {len(top_lines)}", f"${top_sum:,.2f}")
+    #             c2.metric("Sum of bucket (filtered)" if q else "Sum of entire bucket", f"${bucket_sum:,.2f}")
+
+    #             import pandas as pd
+    #             df = pd.DataFrame(
+    #                 [
+    #                     {
+    #                         "Amount": float(ml.amount),
+    #                         "Text": ml.text,
+    #                         "Raw line #": ml.raw_line_no,
+    #                     }
+    #                     for ml in top_lines
+    #                 ]
+    #             )
+    #             st.dataframe(df, use_container_width=True)
+
+
+
+    if explanation:
         # Explanation
         st.markdown("**Explanation**")
         st.write("")
@@ -2043,6 +2138,30 @@ CRITICAL RULE:
 # Mini-Agent B: Renovation Plan
 # ======================
 
+## HELPER TO USE IN RENOVATION TAB (EXTERIOR WORK)
+def expand_work_terms(work_terms: list[str]) -> list[str]:
+    expanded = set(work_terms)
+    joined = " ".join(work_terms)
+
+    # Roofing synonyms
+    if "roof" in joined or "roofing" in joined:
+        expanded.update([
+            "roof", "roofing", "shingle", "shingles", "tile roof", "underlayment",
+            "flashing", "drip edge", "ridge", "valley", "vent", "boots", "felt",
+            "tear off", "reroof", "re-roof"
+        ])
+
+    # Siding synonyms
+    if "siding" in joined or "exterior cladding" in joined or "cladding" in joined:
+        expanded.update([
+            "siding", "cladding", "vinyl", "hardie", "fiber cement", "lap siding",
+            "cedar", "stucco", "house wrap", "wrap", "weather barrier", "tyvek",
+            "fascia", "soffit", "trim", "corner board"
+        ])
+
+    return list(expanded)
+
+
 def build_renovation_system_prompt() -> str:
     return """
 You are a friendly and personable assistant that explains typical sequences for home repair or renovation projects.
@@ -2152,10 +2271,18 @@ def renovation_plan_tab(preferred_lang: Dict):
         "Vanity installation",
         "Shower/tub area work",
 
+        "Roofing (repair/replace, flashing, underlayment)",
+        "Siding / exterior cladding (repair/replace, house wrap, trim)",
+        "Other exterior",
+
         "Other",
     ],
     default=[],
 )
+
+    other_exterior = ""
+    if "Other exterior" in work_types:
+        other_exterior = st.text_input("Describe other exterior work:")
 
     other_work = ""
     if "Other" in work_types:
@@ -2204,6 +2331,10 @@ def renovation_plan_tab(preferred_lang: Dict):
             work_terms = [w.strip().lower() for w in (work_types or []) if w and w.strip()]
             if other_work:
                 work_terms += [w.strip().lower() for w in other_work.replace("\n", ",").split(",") if w.strip()]
+
+            # Just for Exterior - this is used in getting context-aware (from estimate) reno details
+            expanded = expand_work_terms(work_terms)
+            work_terms = list(dict.fromkeys(expanded))  # preserves order, removes dups
 
             # Filter lines that mention ANY room term OR ANY work term (broad on purpose for now)
             filtered_chunks = []
@@ -2283,6 +2414,7 @@ EXTRA NOTES:
                 "rooms": rooms,
                 "other_rooms": other_rooms,
                 "work_types": work_types,
+                "other_exterior": other_exterior,
                 "other_work": other_work,
                 "contractor_sequence": contractor_sequence,
                 "extra_notes": extra_notes,
@@ -2430,6 +2562,7 @@ Rooms: {', '.join(prev_inputs.get('rooms', [])) or 'Not specified'}
 Other rooms: {prev_inputs.get('other_rooms', '') or 'None'}
 Work types: {', '.join(prev_inputs.get('work_types', [])) or 'Not specified'}
 Other work: {prev_inputs.get('other_work', '') or 'None'}
+Other exterior: {prev_inputs.get('other_exterior', '') or 'None'}
 Contractor sequence: {prev_inputs.get('contractor_sequence', '') or 'None provided'}
 Extra notes: {prev_inputs.get('extra_notes', '') or 'None provided'}
 
