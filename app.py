@@ -12,6 +12,16 @@ import urllib.parse
 import html
 import time
 
+# For gated access
+
+from datetime import datetime, timedelta, timezone
+import secrets
+import psycopg
+import extra_streamlit_components as stx
+
+from access_codes import compute_hmac, normalize_access_code
+
+
 
 # ======================
 # Load environment variables
@@ -556,6 +566,167 @@ samp {
             
 </style>
 """, unsafe_allow_html=True)
+
+
+# ==========================================================
+# Auth + DB helpers
+# ==========================================================
+
+COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "ns_session")
+SESSION_DAYS = int(os.getenv("SESSION_DAYS", "30"))
+
+def _db_conn():
+    """
+    Connect to Postgres through cloudsql-proxy. Uses either DATABASE_URL
+    or DB_* environment variables.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if dsn:
+        return psycopg.connect(dsn, autocommit=True)
+
+    host = os.getenv("DB_HOST", "cloudsql-proxy")
+    port = int(os.getenv("DB_PORT", "5432"))
+    name = os.getenv("DB_NAME", "contractor_prod")
+    user = os.getenv("DB_USER", "contractor_app")
+    password = os.getenv("DB_PASSWORD")
+    if not password:
+        raise RuntimeError("DB_PASSWORD is not set")
+
+    return psycopg.connect(
+        host=host,
+        port=port,
+        dbname=name,
+        user=user,
+        password=password,
+        autocommit=True,
+    )
+
+def _cookie_mgr():
+    # CookieManager uses client-side cookies; HttpOnly cannot be guaranteed.
+    return stx.CookieManager()
+
+def _get_cookie_token() -> str | None:
+    cm = _cookie_mgr()
+    val = cm.get(COOKIE_NAME)
+    return val if isinstance(val, str) and val.strip() else None
+
+def _set_cookie_token(token: str):
+    cm = _cookie_mgr()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+
+    # CookieManager APIs vary slightly by version; try modern signature first.
+    try:
+        cm.set(COOKIE_NAME, token, expires_at=expires_at, path="/", same_site="Lax", secure=True)
+    except TypeError:
+        # Fallback for older versions (minimal args)
+        cm.set(COOKIE_NAME, token)
+
+def _clear_cookie_token():
+    cm = _cookie_mgr()
+    try:
+        cm.delete(COOKIE_NAME)
+    except Exception:
+        # best-effort
+        cm.set(COOKIE_NAME, "", expires_at=datetime.now(timezone.utc) - timedelta(days=1), path="/")
+
+def _validate_session(session_token: str) -> int | None:
+    """
+    Returns contractor_id if valid, else None.
+    Checks: exists, revoked_at is null, expires_at > now().
+    """
+    now = datetime.now(timezone.utc)
+    q = """
+        SELECT id, contractor_id, expires_at, revoked_at
+        FROM public.client_sessions
+        WHERE session_token = %s
+        LIMIT 1
+    """
+    with _db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(q, (session_token,))
+            row = cur.fetchone()
+
+            if not row:
+                return None
+
+            session_id, contractor_id, expires_at, revoked_at = row
+            if revoked_at is not None:
+                return None
+            if expires_at is None or expires_at <= now:
+                return None
+
+            # MVP: keep fixed expiry, but update last_seen_at for hygiene.
+            cur.execute(
+                "UPDATE public.client_sessions SET last_seen_at = now() WHERE id = %s",
+                (session_id,),
+            )
+            return int(contractor_id)
+
+def _create_session(contractor_id: int) -> str:
+    token = secrets.token_urlsafe(32)  # unguessable
+    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+
+    q = """
+        INSERT INTO public.client_sessions
+            (contractor_id, expires_at, session_token, user_agent_hash, ip_hash)
+        VALUES
+            (%s, %s, %s, NULL, NULL)
+        RETURNING id
+    """
+    with _db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(q, (contractor_id, expires_at, token))
+            _ = cur.fetchone()
+    return token
+
+def render_login_screen():
+    st.title("Enter access code")
+    st.write("Please enter the access code provided by your contractor.")
+
+    code = st.text_input("Access code", type="password")
+    submitted = st.button("Continue")
+
+    if not submitted:
+        return
+
+    normalized = normalize_access_code(code)
+    if not normalized:
+        st.error("Please enter an access code.")
+        return
+
+    try:
+        h = compute_hmac(normalized)  # uses ACCESS_CODE_KEY_PATH; matches DB seeding
+    except Exception as e:
+        st.error(f"Server configuration error: {e}")
+        return
+
+    q = "SELECT id FROM public.contractors WHERE access_code_hmac = %s LIMIT 1"
+    with _db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(q, (h,))
+            row = cur.fetchone()
+
+    if not row:
+        st.error("Invalid access code.")
+        return
+
+    contractor_id = int(row[0])
+    session_token = _create_session(contractor_id)
+    _set_cookie_token(session_token)
+    st.rerun()
+
+def require_auth() -> int | None:
+    token = _get_cookie_token()
+    if not token:
+        return None
+
+    contractor_id = _validate_session(token)
+    if not contractor_id:
+        # expired/revoked/bad token: clear and force login
+        _clear_cookie_token()
+        return None
+
+    return contractor_id
 
 
 # ======================
@@ -3047,6 +3218,15 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
+    contractor_id = require_auth()
+    if not contractor_id:
+        render_login_screen()
+        return
+
+    # (optional) stash for later use
+    st.session_state["contractor_id"] = contractor_id
+
+
     # Row 1: Header
     header_left, header_right = st.columns([4, 1], vertical_alignment="top")
 
