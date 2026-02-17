@@ -12,6 +12,32 @@ import urllib.parse
 import html
 import time
 
+# ======================
+# Auth / DB deps
+# ======================
+import hmac
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+
+# Optional deps (installed in the container)
+try:
+    import extra_streamlit_components as stx  # CookieManager
+except Exception:  # pragma: no cover
+    stx = None
+
+# Prefer psycopg3, fallback psycopg2
+try:
+    import psycopg  # type: ignore
+except Exception:  # pragma: no cover
+    psycopg = None
+
+try:
+    import psycopg2  # type: ignore
+    import psycopg2.extras  # type: ignore
+except Exception:  # pragma: no cover
+    psycopg2 = None
+
 
 # ======================
 # Load environment variables
@@ -30,6 +56,283 @@ st.set_page_config(
     page_icon="🛠️",
     layout="wide",
 )
+
+
+# ======================
+# Auth configuration
+# ======================
+COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "ns_session")
+SESSION_DAYS = int(os.getenv("SESSION_DAYS", "30"))
+
+def _load_hmac_key_bytes() -> bytes:
+    """Return raw key bytes for computing access_code_hmac.
+
+    Env var naming is intentionally flexible to match whatever is already
+    present in your .env.contractor without renaming.
+
+    Priority:
+      1) ACCESS_CODE_HMAC_KEY (string; hex or utf-8)
+      2) ACCESS_CODE_HMAC_KEY_PATH (file containing hex or raw string)
+      3) ACCESS_CODE_KEY_PATH (existing mounted secret; file containing hex)
+    """
+    # 1) Direct env var
+    k = (os.getenv("ACCESS_CODE_HMAC_KEY") or "").strip()
+    if k:
+        # If it looks like hex, treat as hex.
+        if all(c in "0123456789abcdefABCDEF" for c in k) and len(k) % 2 == 0:
+            try:
+                return bytes.fromhex(k)
+            except ValueError:
+                pass
+        return k.encode("utf-8")
+
+    # 2/3) File-backed key
+    key_path = (
+        os.getenv("ACCESS_CODE_HMAC_KEY_PATH")
+        or os.getenv("ACCESS_CODE_KEY_PATH")
+        or ""
+    ).strip()
+    if key_path:
+        try:
+            raw = open(key_path, "r", encoding="utf-8").read().strip()
+        except FileNotFoundError as e:
+            raise RuntimeError(f"HMAC key file not found: {key_path}") from e
+
+        if raw:
+            if all(c in "0123456789abcdefABCDEF" for c in raw) and len(raw) % 2 == 0:
+                try:
+                    return bytes.fromhex(raw)
+                except ValueError:
+                    pass
+            return raw.encode("utf-8")
+
+    raise RuntimeError(
+        "Missing HMAC key material. Set ACCESS_CODE_HMAC_KEY, "
+        "or provide ACCESS_CODE_HMAC_KEY_PATH / ACCESS_CODE_KEY_PATH."
+    )
+
+def _fail_missing_deps() -> None:
+    # Hard-fail with a clear message if optional auth deps aren't installed.
+    missing = []
+    if stx is None:
+        missing.append("extra-streamlit-components")
+    if psycopg is None and psycopg2 is None:
+        missing.append("psycopg[binary] (preferred) or psycopg2-binary")
+    if missing:
+        st.error(
+            "Auth dependencies are missing in this environment: "
+            + ", ".join(missing)
+            + ".\n\nInstall them in the app container to enable login."
+        )
+        st.stop()
+
+def _get_db_params() -> dict:
+    # Reads DB connection info from env. Supports DATABASE_URL or DB_* vars.
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return {"database_url": database_url}
+
+    return {
+        "host": os.getenv("DB_HOST", "cloudsql-proxy"),
+        "port": int(os.getenv("DB_PORT", "5432")),
+        "dbname": os.getenv("DB_NAME", "contractor_prod"),
+        "user": os.getenv("DB_USER", "contractor_app"),
+        "password": os.getenv("DB_PASSWORD", ""),
+    }
+
+def _db_connect():
+    # Returns a live DB connection using psycopg3 (preferred) or psycopg2.
+    params = _get_db_params()
+    if "database_url" in params:
+        dsn = params["database_url"]
+        if psycopg is not None:
+            return psycopg.connect(dsn)
+        if psycopg2 is not None:
+            return psycopg2.connect(dsn)
+        raise RuntimeError("No Postgres driver available")
+
+    if not params.get("password"):
+        raise RuntimeError("DB_PASSWORD is empty/missing")
+
+    if psycopg is not None:
+        return psycopg.connect(
+            host=params["host"],
+            port=params["port"],
+            dbname=params["dbname"],
+            user=params["user"],
+            password=params["password"],
+        )
+    if psycopg2 is not None:
+        return psycopg2.connect(
+            host=params["host"],
+            port=params["port"],
+            dbname=params["dbname"],
+            user=params["user"],
+            password=params["password"],
+        )
+    raise RuntimeError("No Postgres driver available")
+
+def _compute_access_code_hmac(access_code: str) -> str:
+    # Deterministic HMAC for lookup in contractors.access_code_hmac.
+    normalized = (access_code or "").strip().upper()
+    key_bytes = _load_hmac_key_bytes()
+    return hmac.new(
+        key_bytes,
+        normalized.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+def _cookie_manager():
+    _fail_missing_deps()
+    return stx.CookieManager(key="cookie-manager")
+
+def _get_session_token_from_cookie() -> Optional[str]:
+    cm = _cookie_manager()
+    token = cm.get(COOKIE_NAME)
+    return token if token else None
+
+def _set_session_cookie(session_token: str) -> None:
+    cm = _cookie_manager()
+    expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+    # NOTE: Streamlit cookie components often cannot set HttpOnly cookies
+    # (HttpOnly requires server-set cookies). We still set a persistent cookie
+    # for MVP, and pass Secure/SameSite if the component supports it.
+    try:
+        cm.set(
+            COOKIE_NAME,
+            session_token,
+            expires_at=expires,
+            secure=True,
+            same_site="Lax",
+            path="/",
+        )
+    except TypeError:
+        # Older CookieManager versions don't accept these kwargs.
+        cm.set(COOKIE_NAME, session_token, expires_at=expires)
+
+def _clear_session_cookie() -> None:
+    cm = _cookie_manager()
+    cm.delete(COOKIE_NAME)
+
+def _validate_session(session_token: str) -> Optional[int]:
+    # Returns contractor_id if valid; otherwise None. Updates last_seen_at on success.
+    if not session_token:
+        return None
+
+    conn = _db_connect()
+    try:
+        now = datetime.now(timezone.utc)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT contractor_id, expires_at, revoked_at
+                FROM public.client_sessions
+                WHERE session_token = %s
+                """,
+                (session_token,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            contractor_id, expires_at, revoked_at = row
+            if revoked_at is not None:
+                return None
+            if expires_at <= now:
+                return None
+
+            cur.execute(
+                "UPDATE public.client_sessions SET last_seen_at = now() WHERE session_token = %s",
+                (session_token,),
+            )
+            conn.commit()
+            return int(contractor_id)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def _login_with_access_code(access_code: str) -> Optional[int]:
+    # If access code is valid, creates client_sessions row and returns contractor_id.
+    code = (access_code or "").strip().upper()
+    if not code:
+        return None
+
+    code_hmac = _compute_access_code_hmac(code)
+
+    conn = _db_connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM public.contractors WHERE access_code_hmac = %s",
+                (code_hmac,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            contractor_id = int(row[0])
+
+            session_token = secrets.token_urlsafe(32)  # ~256 bits entropy
+            expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+
+            cur.execute(
+                """
+                INSERT INTO public.client_sessions
+                    (contractor_id, expires_at, session_token, user_agent_hash, ip_hash)
+                VALUES
+                    (%s, %s, %s, NULL, NULL)
+                """,
+                (contractor_id, expires_at, session_token),
+            )
+            conn.commit()
+
+            _set_session_cookie(session_token)
+            return contractor_id
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def require_auth() -> Optional[int]:
+    # Global gate for the app. Returns contractor_id if authenticated; otherwise None.
+    cached = st.session_state.get("contractor_id")
+    if isinstance(cached, int) and cached > 0:
+        return cached
+
+    token = _get_session_token_from_cookie()
+    if not token:
+        return None
+
+    contractor_id = _validate_session(token)
+    if contractor_id:
+        st.session_state["contractor_id"] = contractor_id
+        return contractor_id
+
+    _clear_session_cookie()
+    return None
+
+def render_login_screen() -> None:
+    st.markdown("## Enter your access code")
+    st.caption("Your session lasts 30 days.")
+
+    with st.form("login_form", clear_on_submit=False):
+        access_code = st.text_input("Access code", value="", placeholder="XXXXXXXX")
+        submitted = st.form_submit_button("Continue")
+
+    if submitted:
+        try:
+            contractor_id = _login_with_access_code(access_code)
+        except Exception as e:
+            st.error(f"Login failed due to a server configuration error: {e}")
+            st.stop()
+
+        if contractor_id:
+            st.session_state["contractor_id"] = contractor_id
+            st.success("You're signed in.")
+            st.rerun()
+        else:
+            st.error("That access code didn’t match. Please try again.")
 
 
 #BUCKET_MODEL = "gpt-4o-mini"
@@ -3047,6 +3350,14 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
+    # ----------------------
+    # Auth gate (customers)
+    # ----------------------
+    contractor_id = require_auth()
+    if not contractor_id:
+        render_login_screen()
+        return
+
     # Row 1: Header
     header_left, header_right = st.columns([4, 1], vertical_alignment="top")
 
