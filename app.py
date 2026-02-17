@@ -602,8 +602,10 @@ def _db_conn():
     )
 
 def _cookie_mgr():
-    # CookieManager uses client-side cookies; HttpOnly cannot be guaranteed.
-    return stx.CookieManager()
+    # Create the component once per Streamlit session with a stable unique key.
+    if "_cookie_manager" not in st.session_state:
+        st.session_state["_cookie_manager"] = stx.CookieManager(key="ns_cookie_manager")
+    return st.session_state["_cookie_manager"]
 
 def _get_cookie_token() -> str | None:
     cm = _cookie_mgr()
@@ -612,22 +614,14 @@ def _get_cookie_token() -> str | None:
 
 def _set_cookie_token(token: str):
     cm = _cookie_mgr()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
-
-    # CookieManager APIs vary slightly by version; try modern signature first.
-    try:
-        cm.set(COOKIE_NAME, token, expires_at=expires_at, path="/", same_site="Lax", secure=True)
-    except TypeError:
-        # Fallback for older versions (minimal args)
-        cm.set(COOKIE_NAME, token)
+    cm.set(COOKIE_NAME, token)
 
 def _clear_cookie_token():
     cm = _cookie_mgr()
     try:
         cm.delete(COOKIE_NAME)
     except Exception:
-        # best-effort
-        cm.set(COOKIE_NAME, "", expires_at=datetime.now(timezone.utc) - timedelta(days=1), path="/")
+        cm.set(COOKIE_NAME, "")
 
 def _validate_session(session_token: str) -> int | None:
     """
