@@ -624,12 +624,13 @@ def _get_cookie_token() -> str | None:
 
 def _set_cookie_token(token: str, expires_at: datetime):
     cm = _cookie_mgr()
+    max_age_seconds = SESSION_DAYS * 24 * 60 * 60
     cm.set(
         COOKIE_NAME,
         token,
-        expires_at=expires_at,
+        max_age=max_age_seconds,
         secure=True,
-        same_site="lax",
+        samesite="Lax",
         path="/",
     )
 
@@ -692,7 +693,7 @@ def _create_session(contractor_id: int) -> tuple[str, datetime]:
 
 
 def render_login_screen():
-    st.title("NextStep Home")
+    st.title("NextStep")
     st.subheader("Enter access code")
     st.write("Please enter the access code provided by your contractor.")
 
