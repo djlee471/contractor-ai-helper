@@ -601,56 +601,24 @@ def _db_conn():
         autocommit=True,
     )
 
-def _cookie_mgr():
-    # Create the component once per Streamlit session with a stable unique key.
-    if "_cookie_manager" not in st.session_state:
-        st.session_state["_cookie_manager"] = stx.CookieManager(key="ns_cookie_manager")
-    return st.session_state["_cookie_manager"]
+COOKIE_NAME = "ns_session"
 
 def _get_cookie_token() -> str | None:
-    cm = _cookie_mgr()
+    v = st.cookies.get(COOKIE_NAME)
+    return v if isinstance(v, str) and v.strip() else None
 
-    # CookieManager sometimes needs one render cycle to hydrate cookies from the browser.
-    if not st.session_state.get("_cookies_hydrated"):
-        st.session_state["_cookies_hydrated"] = True
-        try:
-            cm.get_all()  # kick hydration
-        except Exception:
-            pass
-        st.rerun()
-
-    val = cm.get(COOKIE_NAME)
-    return val if isinstance(val, str) and val.strip() else None
-
-def _set_cookie_token(token: str, expires_at: datetime):
-    cm = _cookie_mgr()
-    max_age_seconds = SESSION_DAYS * 24 * 60 * 60
-
-    try:
-        cm.set(
-            COOKIE_NAME,
-            token,
-            max_age=max_age_seconds,
-            secure=True,
-            same_site="lax",
-            path="/",
-        )
-    except TypeError:
-        # Fallback for other versions that use different kwarg names
-        cm.set(
-            COOKIE_NAME,
-            token,
-            max_age=max_age_seconds,
-            secure=True,
-            path="/",
-        )
+def _set_cookie_token(token: str):
+    st.cookies.set(
+        COOKIE_NAME,
+        token,
+        max_age=SESSION_DAYS * 24 * 60 * 60,
+        secure=True,
+        samesite="Lax",
+        path="/",
+    )
 
 def _clear_cookie_token():
-    cm = _cookie_mgr()
-    try:
-        cm.delete(COOKIE_NAME)
-    except Exception:
-        cm.set(COOKIE_NAME, "")
+    st.cookies.set(COOKIE_NAME, "", max_age=0, path="/")
 
 def _validate_session(session_token: str) -> int | None:
     """
@@ -737,13 +705,9 @@ def render_login_screen():
 
     contractor_id = int(row[0])
     session_token, expires_at = _create_session(contractor_id)
-
-    st.session_state["_debug_last_session_token"] = session_token
-    st.session_state["_debug_last_session_expires_at"] = expires_at.isoformat()
-
-    _set_cookie_token(session_token, expires_at)
-
+    _set_cookie_token(session_token)
     st.rerun()
+
 
 
 
