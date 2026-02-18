@@ -737,8 +737,13 @@ def render_login_screen():
 
     contractor_id = int(row[0])
     session_token, expires_at = _create_session(contractor_id)
+
+    st.write("DEBUG server session_token:", session_token)
+
     _set_cookie_token(session_token, expires_at)
-    st.rerun()
+
+    st.stop()   # stop here so we can inspect
+
 
 def require_auth() -> int | None:
     token = _get_cookie_token()
