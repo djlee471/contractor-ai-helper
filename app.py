@@ -601,24 +601,6 @@ def _db_conn():
         autocommit=True,
     )
 
-COOKIE_NAME = "ns_session"
-
-def _get_cookie_token() -> str | None:
-    v = st.cookies.get(COOKIE_NAME)
-    return v if isinstance(v, str) and v.strip() else None
-
-def _set_cookie_token(token: str):
-    st.cookies.set(
-        COOKIE_NAME,
-        token,
-        max_age=SESSION_DAYS * 24 * 60 * 60,
-        secure=True,
-        samesite="Lax",
-        path="/",
-    )
-
-def _clear_cookie_token():
-    st.cookies.set(COOKIE_NAME, "", max_age=0, path="/")
 
 def _validate_session(session_token: str) -> int | None:
     """
@@ -671,7 +653,73 @@ def _create_session(contractor_id: int) -> tuple[str, datetime]:
     return token, expires_at
 
 
+def _cookie_mgr():
+    if "_cookie_manager" not in st.session_state:
+        st.session_state["_cookie_manager"] = stx.CookieManager(key="ns_cookie_manager")
+    return st.session_state["_cookie_manager"]
+
+def _get_cookie_token() -> str | None:
+    cm = _cookie_mgr()
+    val = cm.get(COOKIE_NAME)
+    return val if isinstance(val, str) and val.strip() else None
+
+def _set_cookie_token(token: str, expires_at: datetime):
+    cm = _cookie_mgr()
+    cm.set(
+        COOKIE_NAME,
+        token,
+        max_age=SESSION_DAYS * 24 * 60 * 60,   # <-- keep this (it fixed the 2-day expiry)
+        secure=True,
+        same_site="lax",
+        path="/",
+    )
+
+def _clear_cookie_token():
+    cm = _cookie_mgr()
+    try:
+        cm.delete(COOKIE_NAME)
+    except Exception:
+        cm.set(COOKIE_NAME, "")
+
+COOKIE_SYNC_MAX_RETRIES = 12
+COOKIE_SYNC_SLEEP_SEC = 0.5
+
 def render_login_screen():
+
+    # -------------------------------------------------
+    # 1️⃣ Pending cookie sync block (FIRST THING)
+    # -------------------------------------------------
+    pending = st.session_state.get("_pending_session_token")
+    pending_expires = st.session_state.get("_pending_session_expires_at")
+
+    if pending:
+        current = _get_cookie_token()
+
+        if current == pending:
+            # Cookie now matches DB token → proceed
+            st.session_state.pop("_pending_session_token", None)
+            st.session_state.pop("_pending_session_expires_at", None)
+            st.session_state.pop("_cookie_sync_retries", None)
+            st.rerun()
+
+        retries = st.session_state.get("_cookie_sync_retries", 0)
+
+        if retries >= COOKIE_SYNC_MAX_RETRIES:
+            st.session_state.pop("_pending_session_token", None)
+            st.session_state.pop("_pending_session_expires_at", None)
+            st.session_state.pop("_cookie_sync_retries", None)
+            st.error("Session setup failed. Please try again.")
+            st.stop()
+
+        st.session_state["_cookie_sync_retries"] = retries + 1
+
+        _set_cookie_token(pending, pending_expires)
+        time.sleep(COOKIE_SYNC_SLEEP_SEC)
+        st.rerun()
+
+    # -------------------------------------------------
+    # 2️⃣ Normal login UI (goes AFTER the sync block)
+    # -------------------------------------------------
     st.title("NextStep")
     st.subheader("Enter access code")
     st.write("Please enter the access code provided by your contractor.")
@@ -688,7 +736,7 @@ def render_login_screen():
         return
 
     try:
-        h = compute_hmac(normalized)  # uses ACCESS_CODE_KEY_PATH; matches DB seeding
+        h = compute_hmac(normalized)
     except Exception as e:
         st.error(f"Server configuration error: {e}")
         return
@@ -703,12 +751,18 @@ def render_login_screen():
         st.error("Invalid access code.")
         return
 
+    # -------------------------------------------------
+    # 3️⃣ Successful login → set pending token
+    # -------------------------------------------------
     contractor_id = int(row[0])
     session_token, expires_at = _create_session(contractor_id)
-    _set_cookie_token(session_token)
+
+    st.session_state["_pending_session_token"] = session_token
+    st.session_state["_pending_session_expires_at"] = expires_at
+    st.session_state["_cookie_sync_retries"] = 0
+
+    _set_cookie_token(session_token, expires_at)
     st.rerun()
-
-
 
 
 def require_auth() -> int | None:
@@ -3214,12 +3268,6 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
-    if "_debug_last_session_token" in st.session_state:
-        st.warning(
-            f"DEBUG last login token: {st.session_state['_debug_last_session_token']}\n"
-            f"DEBUG expires_at: {st.session_state['_debug_last_session_expires_at']}"
-        )
-
     contractor_id = require_auth()
     if not contractor_id:
         render_login_screen()
