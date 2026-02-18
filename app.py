@@ -665,14 +665,49 @@ def _get_cookie_token() -> str | None:
 
 def _set_cookie_token(token: str, expires_at: datetime):
     cm = _cookie_mgr()
-    cm.set(
-        COOKIE_NAME,
-        token,
-        max_age=SESSION_DAYS * 24 * 60 * 60,   # <-- keep this (it fixed the 2-day expiry)
-        secure=True,
-        same_site="lax",
-        path="/",
-    )
+
+    # Try: full settings (preferred)
+    try:
+        cm.set(
+            COOKIE_NAME,
+            token,
+            max_age=SESSION_DAYS * 24 * 60 * 60,
+            secure=True,
+            same_site="lax",
+            path="/",
+        )
+        st.session_state["_cookie_set_mode"] = "max_age+secure+same_site+path"
+        return
+    except Exception as e:
+        st.session_state["_cookie_set_error_1"] = repr(e)
+
+    # Try: drop all attrs except max_age
+    try:
+        cm.set(
+            COOKIE_NAME,
+            token,
+            max_age=SESSION_DAYS * 24 * 60 * 60,
+        )
+        st.session_state["_cookie_set_mode"] = "max_age_only"
+        return
+    except Exception as e:
+        st.session_state["_cookie_set_error_2"] = repr(e)
+
+    # Try: expires_at instead of max_age
+    try:
+        cm.set(
+            COOKIE_NAME,
+            token,
+            expires_at=expires_at,
+        )
+        st.session_state["_cookie_set_mode"] = "expires_at_only"
+        return
+    except Exception as e:
+        st.session_state["_cookie_set_error_3"] = repr(e)
+
+    # Last resort: value only
+    cm.set(COOKIE_NAME, token)
+    st.session_state["_cookie_set_mode"] = "value_only"
 
 def _clear_cookie_token():
     cm = _cookie_mgr()
@@ -762,7 +797,18 @@ def render_login_screen():
     st.session_state["_cookie_sync_retries"] = 0
 
     _set_cookie_token(session_token, expires_at)
-    st.rerun()
+
+    # ---- DEBUG START ----
+    st.write("DEBUG server token:", session_token)
+    st.write("DEBUG cookie mode:", st.session_state.get("_cookie_set_mode"))
+    st.write("DEBUG cookie readback:", _get_cookie_token())
+    st.write("DEBUG cookie set errors:",
+            st.session_state.get("_cookie_set_error_1"),
+            st.session_state.get("_cookie_set_error_2"),
+            st.session_state.get("_cookie_set_error_3"))
+    st.stop()
+    # ---- DEBUG END ----
+
 
 
 def require_auth() -> int | None:
