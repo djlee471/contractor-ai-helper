@@ -3221,9 +3221,20 @@ USER'S FOLLOW-UP QUESTION:
 # Main app
 # ======================
 
+# def main():
+#     contractor_id = require_auth()
+#     if not contractor_id:
+#         render_login_screen()
+#         return
+
 def main():
     contractor_id = require_auth()
     if not contractor_id:
+        # If we have a fallback token in session_state, we're mid-hydration
+        # — wait one more rerun before showing login screen
+        if st.session_state.get("_last_valid_session_token"):
+            st.empty()
+            st.rerun()
         render_login_screen()
         return
 
