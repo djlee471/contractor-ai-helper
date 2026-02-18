@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timedelta, timezone
 import secrets
 import psycopg
-import extra_streamlit_components as stx
+from streamlit_cookies_controller import CookieController
 
 from access_codes import compute_hmac, normalize_access_code
 
@@ -652,116 +652,28 @@ def _create_session(contractor_id: int) -> tuple[str, datetime]:
             _ = cur.fetchone()
     return token, expires_at
 
-
 def _cookie_mgr():
-    if "_cookie_manager" not in st.session_state:
-        st.session_state["_cookie_manager"] = stx.CookieManager(key="ns_cookie_manager")
-    return st.session_state["_cookie_manager"]
+    # Must NOT be cached in session_state — needs to render every run
+    return CookieController(key="ns_cookie_manager")
 
 def _get_cookie_token() -> str | None:
-    cm = _cookie_mgr()
-    try:
-        # This helps CookieManager populate its internal state
-        cm.get_all()
-    except Exception:
-        pass
-
-    val = cm.get(COOKIE_NAME)
+    val = _cookie_mgr().get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
-
 def _set_cookie_token(token: str, expires_at: datetime):
-    cm = _cookie_mgr()
-
-    # Try: full settings (preferred)
-    try:
-        cm.set(
-            COOKIE_NAME,
-            token,
-            max_age=SESSION_DAYS * 24 * 60 * 60,
-            secure=True,
-            same_site="lax",
-            path="/",
-        )
-        st.session_state["_cookie_set_mode"] = "max_age+secure+same_site+path"
-        return
-    except Exception as e:
-        st.session_state["_cookie_set_error_1"] = repr(e)
-
-    # Try: drop all attrs except max_age
-    try:
-        cm.set(
-            COOKIE_NAME,
-            token,
-            max_age=SESSION_DAYS * 24 * 60 * 60,
-        )
-        st.session_state["_cookie_set_mode"] = "max_age_only"
-        return
-    except Exception as e:
-        st.session_state["_cookie_set_error_2"] = repr(e)
-
-    # Try: expires_at instead of max_age
-    try:
-        cm.set(
-            COOKIE_NAME,
-            token,
-            expires_at=expires_at,
-        )
-        st.session_state["_cookie_set_mode"] = "expires_at_only"
-        return
-    except Exception as e:
-        st.session_state["_cookie_set_error_3"] = repr(e)
-
-    # Last resort: value only
-    cm.set(COOKIE_NAME, token)
-    st.session_state["_cookie_set_mode"] = "value_only"
+    _cookie_mgr().set(
+        COOKIE_NAME,
+        token,
+        max_age=SESSION_DAYS * 24 * 60 * 60,
+        secure=True,  # ← change to True before deploying
+        same_site="lax",
+        path="/",
+    )
 
 def _clear_cookie_token():
-    cm = _cookie_mgr()
-    try:
-        cm.delete(COOKIE_NAME)
-    except Exception:
-        cm.set(COOKIE_NAME, "")
-
-COOKIE_SYNC_MAX_RETRIES = 12
-COOKIE_SYNC_SLEEP_SEC = 0.5
+    _cookie_mgr().remove(COOKIE_NAME)
 
 def render_login_screen():
-
-    # -------------------------------------------------
-    # 1️⃣ Pending cookie sync block (FIRST THING)
-    # -------------------------------------------------
-    pending = st.session_state.get("_pending_session_token")
-    pending_expires = st.session_state.get("_pending_session_expires_at")
-
-    if pending:
-        current = _get_cookie_token()
-
-        if current == pending:
-            # Cookie now matches DB token → proceed
-            st.session_state.pop("_pending_session_token", None)
-            st.session_state.pop("_pending_session_expires_at", None)
-            st.session_state.pop("_cookie_sync_retries", None)
-            st.rerun()
-
-        retries = st.session_state.get("_cookie_sync_retries", 0)
-
-        if retries >= COOKIE_SYNC_MAX_RETRIES:
-            st.session_state.pop("_pending_session_token", None)
-            st.session_state.pop("_pending_session_expires_at", None)
-            st.session_state.pop("_cookie_sync_retries", None)
-            st.error("Session setup failed. Please try again.")
-            st.stop()
-
-        st.session_state["_cookie_sync_retries"] = retries + 1
-
-        _set_cookie_token(pending, pending_expires)
-        time.sleep(COOKIE_SYNC_SLEEP_SEC)
-        st.rerun()
-
-    # -------------------------------------------------
-    # 2️⃣ Normal login UI (goes AFTER the sync block)
-    # -------------------------------------------------
     st.title("NextStep")
     st.subheader("Enter access code")
     st.write("Please enter the access code provided by your contractor.")
@@ -793,41 +705,30 @@ def render_login_screen():
         st.error("Invalid access code.")
         return
 
-    # -------------------------------------------------
-    # 3️⃣ Successful login → set pending token
-    # -------------------------------------------------
     contractor_id = int(row[0])
     session_token, expires_at = _create_session(contractor_id)
     _set_cookie_token(session_token, expires_at)
+    # Store in session_state as immediate fallback for the first rerun
+    st.session_state["_last_valid_session_token"] = session_token
     st.rerun()
 
 
-
 def require_auth() -> int | None:
-    # Try cookie first
     token = _get_cookie_token()
 
-    # If CookieManager momentarily returns None, fall back to last known good token
+    # Fallback: cookie component may return None on the rerun immediately after login
     if not token:
         token = st.session_state.get("_last_valid_session_token")
-        print("[AUTH] token from session_state fallback:", repr(token))
-    else:
-        print("[AUTH] token from cookie:", repr(token))
 
     if not token:
         return None
 
     contractor_id = _validate_session(token)
-    print("[AUTH] validate_session ->", contractor_id)
-
     if not contractor_id:
-        # Only clear cookie if we had an actual token and it failed validation.
-        # If token came from fallback and is invalid, clear fallback too.
         _clear_cookie_token()
         st.session_state.pop("_last_valid_session_token", None)
         return None
 
-    # Cache last known-good token so transient cookie None doesn't boot user out
     st.session_state["_last_valid_session_token"] = token
     return contractor_id
 
@@ -3321,15 +3222,6 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
-    # One-time cookie hydration gate (must happen before require_auth)
-    if not st.session_state.get("_cookies_hydrated_once", False):
-        st.session_state["_cookies_hydrated_once"] = True
-        try:
-            _cookie_mgr().get_all()   # trigger CookieManager hydration
-        except Exception:
-            pass
-        st.rerun()
-
     contractor_id = require_auth()
     if not contractor_id:
         render_login_screen()
