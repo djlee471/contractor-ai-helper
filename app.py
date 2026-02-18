@@ -738,11 +738,13 @@ def render_login_screen():
     contractor_id = int(row[0])
     session_token, expires_at = _create_session(contractor_id)
 
-    st.write("DEBUG server session_token:", session_token)
+    st.session_state["_debug_last_session_token"] = session_token
+    st.session_state["_debug_last_session_expires_at"] = expires_at.isoformat()
 
     _set_cookie_token(session_token, expires_at)
 
-    st.stop()   # stop here so we can inspect
+    st.rerun()
+
 
 
 def require_auth() -> int | None:
@@ -3248,6 +3250,12 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
+    if "_debug_last_session_token" in st.session_state:
+        st.warning(
+            f"DEBUG last login token: {st.session_state['_debug_last_session_token']}\n"
+            f"DEBUG expires_at: {st.session_state['_debug_last_session_expires_at']}"
+        )
+
     contractor_id = require_auth()
     if not contractor_id:
         render_login_screen()
