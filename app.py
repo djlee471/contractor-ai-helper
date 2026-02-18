@@ -660,6 +660,16 @@ def _cookie_mgr():
 
 def _get_cookie_token() -> str | None:
     cm = _cookie_mgr()
+
+    # One-time hydration on fresh page load
+    if not st.session_state.get("_cookies_hydrated", False):
+        st.session_state["_cookies_hydrated"] = True
+        try:
+            cm.get_all()  # kick component hydration
+        except Exception:
+            pass
+        st.rerun()
+
     val = cm.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
@@ -797,7 +807,17 @@ def render_login_screen():
     st.session_state["_cookie_sync_retries"] = 0
 
     _set_cookie_token(session_token, expires_at)
-    st.rerun() 
+
+    # ---- DEBUG START ----
+    st.write("DEBUG server token:", session_token)
+    st.write("DEBUG cookie mode:", st.session_state.get("_cookie_set_mode"))
+    st.write("DEBUG cookie readback:", _get_cookie_token())
+    st.write("DEBUG cookie set errors:",
+            st.session_state.get("_cookie_set_error_1"),
+            st.session_state.get("_cookie_set_error_2"),
+            st.session_state.get("_cookie_set_error_3"))
+    st.stop()
+    # ---- DEBUG END ----
 
 
 
@@ -3304,7 +3324,6 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
-    _cookie_mgr()  
     contractor_id = require_auth()
     if not contractor_id:
         render_login_screen()
