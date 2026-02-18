@@ -814,14 +814,12 @@ def render_login_screen():
 def require_auth() -> int | None:
     token = _get_cookie_token()
     print("[AUTH] token:", repr(token))
-    
+
     if not token:
         return None
 
     contractor_id = _validate_session(token)
     if not contractor_id:
-        # expired/revoked/bad token: clear and force login
-        _clear_cookie_token()
         return None
     
     return contractor_id
@@ -3316,11 +3314,11 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
-    # One-time cookie hydration gate
+    # One-time cookie hydration gate (must happen before require_auth)
     if not st.session_state.get("_cookies_hydrated_once", False):
         st.session_state["_cookies_hydrated_once"] = True
         try:
-            _cookie_mgr().get_all()
+            _cookie_mgr().get_all()   # trigger CookieManager hydration
         except Exception:
             pass
         st.rerun()
