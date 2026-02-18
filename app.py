@@ -609,6 +609,16 @@ def _cookie_mgr():
 
 def _get_cookie_token() -> str | None:
     cm = _cookie_mgr()
+
+    # CookieManager sometimes needs one render cycle to hydrate cookies from the browser.
+    if not st.session_state.get("_cookies_hydrated"):
+        st.session_state["_cookies_hydrated"] = True
+        try:
+            cm.get_all()  # kick hydration
+        except Exception:
+            pass
+        st.rerun()
+
     val = cm.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
@@ -682,7 +692,7 @@ def _create_session(contractor_id: int) -> tuple[str, datetime]:
 
 
 def render_login_screen():
-    st.title("NextStep")
+    st.title("NextStep Home")
     st.subheader("Enter access code")
     st.write("Please enter the access code provided by your contractor.")
 
