@@ -1740,7 +1740,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
             ]
 
             # Extract text with pdfplumber (per-document)
-            from estimate_extract import extract_pdf_pages_text, join_page_packets
+            from estimate_extract import extract_pdf_pages_text, join_page_packets, redact_estimate_text
             from material_totals import compute_material_totals
 
             # ====================
@@ -1787,6 +1787,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
                     t0 = time.perf_counter()
                     packets = extract_pdf_pages_text(f.getvalue())
                     block = join_page_packets(packets)
+                    block = redact_estimate_text(block)
                     t1 = time.perf_counter()
 
                     elapsed = t1 - t0
@@ -1803,6 +1804,7 @@ def estimate_explainer_tab(preferred_lang: Dict):
                     t0 = time.perf_counter()
                     packets = extract_pdf_pages_text(f.getvalue())
                     block = join_page_packets(packets)
+                    block = redact_estimate_text(block)
                     t1 = time.perf_counter()
 
                     elapsed = t1 - t0
@@ -2235,18 +2237,22 @@ ORIGINAL NOTES FROM USER:
 """.strip()
 
                         # Re-extract text for follow-up
-                        from estimate_extract import extract_pdf_pages_text, join_page_packets
-                        
+                        from estimate_extract import extract_pdf_pages_text, join_page_packets, redact_estimate_text
+
                         all_text = ""
                         for pdf_data in insurance_pdf_data:
                             packets = extract_pdf_pages_text(pdf_data["bytes"])
+                            block = join_page_packets(packets)
+                            block = redact_estimate_text(block)
                             all_text += f"\n\n=== INSURANCE: {pdf_data['name']} ===\n\n"
-                            all_text += join_page_packets(packets)
-                        
+                            all_text += block
+
                         for pdf_data in contractor_pdf_data:
                             packets = extract_pdf_pages_text(pdf_data["bytes"])
+                            block = join_page_packets(packets)
+                            block = redact_estimate_text(block)
                             all_text += f"\n\n=== CONTRACTOR: {pdf_data['name']} ===\n\n"
-                            all_text += join_page_packets(packets)
+                            all_text += block
                         
                         follow_user_content = f"""
 {follow_notes}
