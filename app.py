@@ -797,17 +797,7 @@ def render_login_screen():
     st.session_state["_cookie_sync_retries"] = 0
 
     _set_cookie_token(session_token, expires_at)
-
-    # ---- DEBUG START ----
-    st.write("DEBUG server token:", session_token)
-    st.write("DEBUG cookie mode:", st.session_state.get("_cookie_set_mode"))
-    st.write("DEBUG cookie readback:", _get_cookie_token())
-    st.write("DEBUG cookie set errors:",
-            st.session_state.get("_cookie_set_error_1"),
-            st.session_state.get("_cookie_set_error_2"),
-            st.session_state.get("_cookie_set_error_3"))
-    st.stop()
-    # ---- DEBUG END ----
+    st.rerun() 
 
 
 
@@ -3314,6 +3304,7 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
+    _cookie_mgr()  
     contractor_id = require_auth()
     if not contractor_id:
         render_login_screen()
