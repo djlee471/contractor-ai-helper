@@ -625,14 +625,25 @@ def _get_cookie_token() -> str | None:
 def _set_cookie_token(token: str, expires_at: datetime):
     cm = _cookie_mgr()
     max_age_seconds = SESSION_DAYS * 24 * 60 * 60
-    cm.set(
-        COOKIE_NAME,
-        token,
-        max_age=max_age_seconds,
-        secure=True,
-        samesite="Lax",
-        path="/",
-    )
+
+    try:
+        cm.set(
+            COOKIE_NAME,
+            token,
+            max_age=max_age_seconds,
+            secure=True,
+            same_site="lax",
+            path="/",
+        )
+    except TypeError:
+        # Fallback for other versions that use different kwarg names
+        cm.set(
+            COOKIE_NAME,
+            token,
+            max_age=max_age_seconds,
+            secure=True,
+            path="/",
+        )
 
 def _clear_cookie_token():
     cm = _cookie_mgr()
