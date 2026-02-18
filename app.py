@@ -612,9 +612,16 @@ def _get_cookie_token() -> str | None:
     val = cm.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
-def _set_cookie_token(token: str):
+def _set_cookie_token(token: str, expires_at: datetime):
     cm = _cookie_mgr()
-    cm.set(COOKIE_NAME, token)
+    cm.set(
+        COOKIE_NAME,
+        token,
+        expires_at=expires_at,
+        secure=True,
+        same_site="lax",
+        path="/",
+    )
 
 def _clear_cookie_token():
     cm = _cookie_mgr()
@@ -656,8 +663,8 @@ def _validate_session(session_token: str) -> int | None:
             )
             return int(contractor_id)
 
-def _create_session(contractor_id: int) -> str:
-    token = secrets.token_urlsafe(32)  # unguessable
+def _create_session(contractor_id: int) -> tuple[str, datetime]:
+    token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
 
     q = """
@@ -671,10 +678,12 @@ def _create_session(contractor_id: int) -> str:
         with conn.cursor() as cur:
             cur.execute(q, (contractor_id, expires_at, token))
             _ = cur.fetchone()
-    return token
+    return token, expires_at
+
 
 def render_login_screen():
-    st.title("Enter access code")
+    st.title("NextStep")
+    st.subheader("Enter access code")
     st.write("Please enter the access code provided by your contractor.")
 
     code = st.text_input("Access code", type="password")
@@ -705,8 +714,8 @@ def render_login_screen():
         return
 
     contractor_id = int(row[0])
-    session_token = _create_session(contractor_id)
-    _set_cookie_token(session_token)
+    session_token, expires_at = _create_session(contractor_id)
+    _set_cookie_token(session_token, expires_at)
     st.rerun()
 
 def require_auth() -> int | None:
