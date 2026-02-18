@@ -660,16 +660,6 @@ def _cookie_mgr():
 
 def _get_cookie_token() -> str | None:
     cm = _cookie_mgr()
-
-    # One-time hydration on fresh page load
-    if not st.session_state.get("_cookies_hydrated", False):
-        st.session_state["_cookies_hydrated"] = True
-        try:
-            cm.get_all()  # kick component hydration
-        except Exception:
-            pass
-        st.rerun()
-
     val = cm.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
@@ -823,6 +813,8 @@ def render_login_screen():
 
 def require_auth() -> int | None:
     token = _get_cookie_token()
+    print("[AUTH] token:", repr(token))
+    
     if not token:
         return None
 
@@ -831,7 +823,7 @@ def require_auth() -> int | None:
         # expired/revoked/bad token: clear and force login
         _clear_cookie_token()
         return None
-
+    
     return contractor_id
 
 
@@ -3324,14 +3316,21 @@ USER'S FOLLOW-UP QUESTION:
 # ======================
 
 def main():
+    # One-time cookie hydration gate
+    if not st.session_state.get("_cookies_hydrated_once", False):
+        st.session_state["_cookies_hydrated_once"] = True
+        try:
+            _cookie_mgr().get_all()
+        except Exception:
+            pass
+        st.rerun()
+
     contractor_id = require_auth()
     if not contractor_id:
         render_login_screen()
         return
 
-    # (optional) stash for later use
     st.session_state["contractor_id"] = contractor_id
-
 
     # Row 1: Header
     header_left, header_right = st.columns([4, 1], vertical_alignment="top")
