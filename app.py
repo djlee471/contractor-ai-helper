@@ -660,8 +660,15 @@ def _cookie_mgr():
 
 def _get_cookie_token() -> str | None:
     cm = _cookie_mgr()
+    try:
+        # This helps CookieManager populate its internal state
+        cm.get_all()
+    except Exception:
+        pass
+
     val = cm.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
+
 
 def _set_cookie_token(token: str, expires_at: datetime):
     cm = _cookie_mgr()
@@ -791,37 +798,37 @@ def render_login_screen():
     # -------------------------------------------------
     contractor_id = int(row[0])
     session_token, expires_at = _create_session(contractor_id)
-
-    st.session_state["_pending_session_token"] = session_token
-    st.session_state["_pending_session_expires_at"] = expires_at
-    st.session_state["_cookie_sync_retries"] = 0
-
     _set_cookie_token(session_token, expires_at)
-
-    # ---- DEBUG START ----
-    st.write("DEBUG server token:", session_token)
-    st.write("DEBUG cookie mode:", st.session_state.get("_cookie_set_mode"))
-    st.write("DEBUG cookie readback:", _get_cookie_token())
-    st.write("DEBUG cookie set errors:",
-            st.session_state.get("_cookie_set_error_1"),
-            st.session_state.get("_cookie_set_error_2"),
-            st.session_state.get("_cookie_set_error_3"))
-    st.stop()
-    # ---- DEBUG END ----
+    st.rerun()
 
 
 
 def require_auth() -> int | None:
+    # Try cookie first
     token = _get_cookie_token()
-    print("[AUTH] token:", repr(token))
+
+    # If CookieManager momentarily returns None, fall back to last known good token
+    if not token:
+        token = st.session_state.get("_last_valid_session_token")
+        print("[AUTH] token from session_state fallback:", repr(token))
+    else:
+        print("[AUTH] token from cookie:", repr(token))
 
     if not token:
         return None
 
     contractor_id = _validate_session(token)
+    print("[AUTH] validate_session ->", contractor_id)
+
     if not contractor_id:
+        # Only clear cookie if we had an actual token and it failed validation.
+        # If token came from fallback and is invalid, clear fallback too.
+        _clear_cookie_token()
+        st.session_state.pop("_last_valid_session_token", None)
         return None
-    
+
+    # Cache last known-good token so transient cookie None doesn't boot user out
+    st.session_state["_last_valid_session_token"] = token
     return contractor_id
 
 
