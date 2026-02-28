@@ -688,12 +688,21 @@ def _clear_cookie_token():
 
 def require_auth() -> int | None:
     token = _get_cookie_token()
+
+    # One-rerun bridge: cookie not in browser yet right after login
+    if not token:
+        token = st.session_state.get("_last_valid_session_token")
+
     if not token:
         return None
+
     contractor_id = _validate_session(token)
     if not contractor_id:
         _clear_cookie_token()
+        st.session_state.pop("_last_valid_session_token", None)
         return None
+
+    st.session_state["_last_valid_session_token"] = token
     return contractor_id
 
 def render_login_screen():
