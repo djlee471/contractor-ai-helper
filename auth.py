@@ -63,7 +63,7 @@ async def login_form(error: str = ""):
                 margin: 100px auto;
                 padding: 0 20px;
             }}
-            h2 {{ font-size: 2rem; font-weight: 500; color: #94A3B8; margin-bottom: 1.75rem; }}
+            h2 {{ font-size: 2rem; font-weight: 6500; color: #94A3B8; margin-bottom: 1.75rem; }}
             p {{ color: #64748B; font-size: 0.95rem; margin-bottom: 1.75rem; }}
             input {{ width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-family: "Manrope", sans-serif; font-size: 0.95rem; box-sizing: border-box; }}
             button {{ width: 100%; padding: 10px; background: #420741; color: white; border: none; border-radius: 8px; font-family: "Manrope", sans-serif; font-size: 0.95rem; font-weight: 600; cursor: pointer; }}
@@ -72,7 +72,6 @@ async def login_form(error: str = ""):
         </style>
     </head>
     <body>
-        <div class="brand">NextStep</div>
         <h2>NextStep</h2>
         <p>Enter the access code provided by your contractor.</p>
         {error_html}
