@@ -6,3 +6,6 @@ fpdf==1.7.2
 cryptography>=42.0.0
 psycopg[binary]
 streamlit-cookies-controller
+fastapi
+uvicorn
+python-multipart

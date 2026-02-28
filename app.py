@@ -710,73 +710,11 @@ def require_auth() -> int | None:
     return contractor_id
 
 def render_login_screen():
-    st.title("NextStep")
-    st.subheader("Enter access code")
-    st.write("Please enter the access code provided by your contractor.")
-
-    code = st.text_input("Access code", type="password")
-    submitted = st.button("Continue")
-
-    if not submitted:
-        return
-
-    normalized = normalize_access_code(code)
-    if not normalized:
-        st.error("Please enter an access code.")
-        return
-
-    try:
-        h = compute_hmac(normalized)
-    except Exception as e:
-        st.error(f"Server configuration error: {e}")
-        return
-
-    q = """
-        SELECT id, subscription_status, trial_ends_at
-        FROM public.contractors
-        WHERE access_code_hmac = %s
-        LIMIT 1
-    """
-    with _db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(q, (h,))
-            row = cur.fetchone()
-
-    if not row:
-        st.error("Invalid access code.")
-        return
-
-    contractor_id, status, trial_ends_at = row
-
-    now = datetime.now(timezone.utc)
-
-    # entitlement check
-    if status == "active":
-        pass
-    elif status == "trial":
-        if trial_ends_at is None or trial_ends_at <= now:
-            st.error("This access code is no longer active (trial ended).")
-            return
-    else:
-        st.error("This access code is not active. Please contact your contractor.")
-        return
-
-    # contractor_id = int(contractor_id)
-    # session_token, expires_at = _create_session(contractor_id)
-    # _set_cookie_token(session_token, expires_at)
-    # # Store in session_state as immediate fallback for the first rerun
-    # st.session_state["_last_valid_session_token"] = session_token
-    # st.rerun()
-
-    contractor_id = int(contractor_id)
-    session_token, expires_at = _create_session(contractor_id)
-    print(f"[LOGIN] created session token: {session_token[:10]}...")
-    _set_cookie_token(session_token, expires_at)
-    print(f"[LOGIN] cookie set called")
-    st.session_state["_last_valid_session_token"] = session_token
-    print(f"[LOGIN] session_state set")
-    st.rerun()
-
+    st.markdown(
+        '<meta http-equiv="refresh" content="0; url=/auth/login">',
+        unsafe_allow_html=True
+    )
+    st.stop()
 
 # ======================
 # OpenAI client helper

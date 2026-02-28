@@ -7,7 +7,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-  && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -19,5 +19,36 @@ ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
 EXPOSE 8501
+EXPOSE 8502
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Start both FastAPI (8502) and Streamlit (8501)
+CMD ["sh", "-c", "uvicorn auth:app --host 0.0.0.0 --port 8502 & streamlit run app.py --server.port=8501 --server.address=0.0.0.0"]
+```
+
+---
+
+### FILE 4: `~/deploy/Caddyfile` (replace existing)
+```
+hair.elseframe.com {
+    reverse_proxy hair:3000
+}
+
+contractor.elseframe.com {
+
+    @robots path /robots.txt
+    respond @robots "User-agent: *\nDisallow: /\n" 200
+
+    header {
+        X-Robots-Tag "noindex, nofollow, noarchive"
+    }
+
+    # Auth endpoints go to FastAPI
+    handle /auth/* {
+        reverse_proxy contractor:8502
+    }
+
+    # Everything else goes to Streamlit
+    handle {
+        reverse_proxy contractor:8501
+    }
+}
