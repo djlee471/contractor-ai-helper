@@ -671,15 +671,26 @@ def _get_cookie_token() -> str | None:
     val = _cookie_mgr().get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
+# def _set_cookie_token(token: str, expires_at: datetime):
+#     _cookie_mgr().set(
+#         COOKIE_NAME,
+#         token,
+#         max_age=SESSION_DAYS * 24 * 60 * 60,
+#         secure=True,  # ← change to True before deploying
+#         same_site="lax",
+#         path="/",
+#     )
+
 def _set_cookie_token(token: str, expires_at: datetime):
     _cookie_mgr().set(
         COOKIE_NAME,
         token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
-        secure=True,  # ← change to True before deploying
+        secure=False,          # TEMP for testing
         same_site="lax",
         path="/",
     )
+
 
 def _clear_cookie_token():
     _cookie_mgr().remove(COOKIE_NAME)
