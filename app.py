@@ -668,21 +668,33 @@ def _cookie_mgr():
     return CookieController(key="ns_cookie_manager")
 
 def _get_cookie_token() -> str | None:
-    val = _cookie_mgr().get(COOKIE_NAME)
+    # Native read — no component, no race condition
+    val = st.context.cookies.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
 def _set_cookie_token(token: str, expires_at: datetime):
-    _cookie_mgr().set(
+    # Component only used for writing
+    CookieController(key="ns_cookie_writer").set(
         COOKIE_NAME,
         token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
-        secure=False,  # ← change to True before deploying
+        secure=True,
         same_site="lax",
         path="/",
     )
 
 def _clear_cookie_token():
-    _cookie_mgr().remove(COOKIE_NAME)
+    CookieController(key="ns_cookie_writer").remove(COOKIE_NAME)
+
+def require_auth() -> int | None:
+    token = _get_cookie_token()
+    if not token:
+        return None
+    contractor_id = _validate_session(token)
+    if not contractor_id:
+        _clear_cookie_token()
+        return None
+    return contractor_id
 
 def render_login_screen():
     st.title("NextStep")
@@ -751,26 +763,6 @@ def render_login_screen():
     st.session_state["_last_valid_session_token"] = session_token
     print(f"[LOGIN] session_state set")
     st.rerun()
-
-
-def require_auth() -> int | None:
-    token = _get_cookie_token()
-
-    # Fallback: cookie component may return None on the rerun immediately after login
-    if not token:
-        token = st.session_state.get("_last_valid_session_token")
-
-    if not token:
-        return None
-
-    contractor_id = _validate_session(token)
-    if not contractor_id:
-        _clear_cookie_token()
-        st.session_state.pop("_last_valid_session_token", None)
-        return None
-
-    st.session_state["_last_valid_session_token"] = token
-    return contractor_id
 
 
 # ======================
@@ -3274,18 +3266,8 @@ USER'S FOLLOW-UP QUESTION:
 #         return
 
 def main():
-
-    st.write("Streamlit version:", st.__version__)
-    st.write("Cookie keys:", list(st.context.cookies.keys()))
-    st.stop()
-
     contractor_id = require_auth()
     if not contractor_id:
-        # If we have a fallback token in session_state, we're mid-hydration
-        # — wait one more rerun before showing login screen
-        if st.session_state.get("_last_valid_session_token"):
-            st.empty()
-            st.rerun()
         render_login_screen()
         return
 
