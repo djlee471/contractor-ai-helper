@@ -673,15 +673,19 @@ def _get_cookie_token() -> str | None:
     return val if isinstance(val, str) and val.strip() else None
 
 def _set_cookie_token(token: str, expires_at: datetime):
-    # Component only used for writing
-    CookieController(key="ns_cookie_writer").set(
-        COOKIE_NAME,
-        token,
-        max_age=SESSION_DAYS * 24 * 60 * 60,
-        secure=True,
-        same_site="lax",
-        path="/",
-    )
+    try:
+        ctrl = CookieController(key="ns_cookie_writer")
+        ctrl.set(
+            COOKIE_NAME,
+            token,
+            max_age=SESSION_DAYS * 24 * 60 * 60,
+            secure=True,
+            same_site="lax",
+            path="/",
+        )
+        print(f"[COOKIE] set() called successfully")
+    except Exception as e:
+        print(f"[COOKIE] set() failed: {e}")
 
 def _clear_cookie_token():
     CookieController(key="ns_cookie_writer").remove(COOKIE_NAME)
