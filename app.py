@@ -604,36 +604,47 @@ def _db_conn():
 
 def _validate_session(session_token: str) -> int | None:
     """
-    Returns contractor_id if valid, else None.
-    Checks: exists, revoked_at is null, expires_at > now().
+    Returns contractor_id if session is valid AND contractor is entitled.
+    Session checks: exists, revoked_at is null, expires_at > now().
+    Entitlement checks:
+      - active => allow
+      - trial  => allow only if trial_ends_at not null and now() < trial_ends_at
+      - else   => deny
     """
-    now = datetime.now(timezone.utc)
     q = """
-        SELECT id, contractor_id, expires_at, revoked_at
-        FROM public.client_sessions
-        WHERE session_token = %s
+        SELECT
+            s.id AS session_id,
+            s.contractor_id
+        FROM public.client_sessions s
+        JOIN public.contractors c
+          ON c.id = s.contractor_id
+        WHERE s.session_token = %s
+          AND s.revoked_at IS NULL
+          AND s.expires_at > now()
+          AND (
+                c.subscription_status = 'active'
+             OR (c.subscription_status = 'trial'
+                 AND c.trial_ends_at IS NOT NULL
+                 AND c.trial_ends_at > now())
+          )
         LIMIT 1
     """
     with _db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(q, (session_token,))
             row = cur.fetchone()
-
             if not row:
                 return None
 
-            session_id, contractor_id, expires_at, revoked_at = row
-            if revoked_at is not None:
-                return None
-            if expires_at is None or expires_at <= now:
-                return None
+            session_id, contractor_id = row
 
-            # MVP: keep fixed expiry, but update last_seen_at for hygiene.
+            # Optional hygiene update (consider throttling later)
             cur.execute(
                 "UPDATE public.client_sessions SET last_seen_at = now() WHERE id = %s",
                 (session_id,),
             )
             return int(contractor_id)
+
 
 def _create_session(contractor_id: int) -> tuple[str, datetime]:
     token = secrets.token_urlsafe(32)
@@ -695,7 +706,12 @@ def render_login_screen():
         st.error(f"Server configuration error: {e}")
         return
 
-    q = "SELECT id FROM public.contractors WHERE access_code_hmac = %s LIMIT 1"
+    q = """
+        SELECT id, subscription_status, trial_ends_at
+        FROM public.contractors
+        WHERE access_code_hmac = %s
+        LIMIT 1
+    """
     with _db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(q, (h,))
@@ -705,7 +721,22 @@ def render_login_screen():
         st.error("Invalid access code.")
         return
 
-    contractor_id = int(row[0])
+    contractor_id, status, trial_ends_at = row
+
+    now = datetime.now(timezone.utc)
+
+    # entitlement check
+    if status == "active":
+        pass
+    elif status == "trial":
+        if trial_ends_at is None or trial_ends_at <= now:
+            st.error("This access code is no longer active (trial ended).")
+            return
+    else:
+        st.error("This access code is not active. Please contact your contractor.")
+        return
+
+    contractor_id = int(contractor_id)
     session_token, expires_at = _create_session(contractor_id)
     _set_cookie_token(session_token, expires_at)
     # Store in session_state as immediate fallback for the first rerun
