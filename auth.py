@@ -63,8 +63,7 @@ async def login_form(error: str = ""):
                 margin: 100px auto;
                 padding: 0 20px;
             }}
-            .brand {{ font-size: 0.85rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }}
-            h2 {{ font-size: 1.6rem; font-weight: 700; color: #420741; margin-bottom: 0.5rem; }}
+            h2 {{ font-size: 2rem; font-weight: 500; color: #94A3B8; margin-bottom: 1.75rem; }}
             p {{ color: #64748B; font-size: 0.95rem; margin-bottom: 1.75rem; }}
             input {{ width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-family: "Manrope", sans-serif; font-size: 0.95rem; box-sizing: border-box; }}
             button {{ width: 100%; padding: 10px; background: #420741; color: white; border: none; border-radius: 8px; font-family: "Manrope", sans-serif; font-size: 0.95rem; font-weight: 600; cursor: pointer; }}
@@ -74,7 +73,7 @@ async def login_form(error: str = ""):
     </head>
     <body>
         <div class="brand">NextStep</div>
-        <h2>Welcome back</h2>
+        <h2>NextStep</h2>
         <p>Enter the access code provided by your contractor.</p>
         {error_html}
         <form method="POST" action="/auth/login">
