@@ -736,12 +736,21 @@ def render_login_screen():
         st.error("This access code is not active. Please contact your contractor.")
         return
 
+    # contractor_id = int(contractor_id)
+    # session_token, expires_at = _create_session(contractor_id)
+    # _set_cookie_token(session_token, expires_at)
+    # # Store in session_state as immediate fallback for the first rerun
+    # st.session_state["_last_valid_session_token"] = session_token
+    # st.rerun()
+
     contractor_id = int(contractor_id)
-    session_token, expires_at = _create_session(contractor_id)
-    _set_cookie_token(session_token, expires_at)
-    # Store in session_state as immediate fallback for the first rerun
-    st.session_state["_last_valid_session_token"] = session_token
-    st.rerun()
+        session_token, expires_at = _create_session(contractor_id)
+        print(f"[LOGIN] created session token: {session_token[:10]}...")
+        _set_cookie_token(session_token, expires_at)
+        print(f"[LOGIN] cookie set called")
+        st.session_state["_last_valid_session_token"] = session_token
+        print(f"[LOGIN] session_state set")
+        st.rerun()
 
 
 def require_auth() -> int | None:
