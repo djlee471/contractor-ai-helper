@@ -3274,6 +3274,11 @@ USER'S FOLLOW-UP QUESTION:
 #         return
 
 def main():
+
+    st.write("Streamlit version:", st.__version__)
+    st.write("Cookie keys:", list(st.context.cookies.keys()))
+    st.stop()
+
     contractor_id = require_auth()
     if not contractor_id:
         # If we have a fallback token in session_state, we're mid-hydration
