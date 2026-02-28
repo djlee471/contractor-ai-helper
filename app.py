@@ -744,13 +744,13 @@ def render_login_screen():
     # st.rerun()
 
     contractor_id = int(contractor_id)
-        session_token, expires_at = _create_session(contractor_id)
-        print(f"[LOGIN] created session token: {session_token[:10]}...")
-        _set_cookie_token(session_token, expires_at)
-        print(f"[LOGIN] cookie set called")
-        st.session_state["_last_valid_session_token"] = session_token
-        print(f"[LOGIN] session_state set")
-        st.rerun()
+    session_token, expires_at = _create_session(contractor_id)
+    print(f"[LOGIN] created session token: {session_token[:10]}...")
+    _set_cookie_token(session_token, expires_at)
+    print(f"[LOGIN] cookie set called")
+    st.session_state["_last_valid_session_token"] = session_token
+    print(f"[LOGIN] session_state set")
+    st.rerun()
 
 
 def require_auth() -> int | None:
