@@ -23,32 +23,3 @@ EXPOSE 8502
 
 # Start both FastAPI (8502) and Streamlit (8501)
 CMD ["sh", "-c", "uvicorn auth:app --host 0.0.0.0 --port 8502 & streamlit run app.py --server.port=8501 --server.address=0.0.0.0"]
-```
-
----
-
-### FILE 4: `~/deploy/Caddyfile` (replace existing)
-```
-hair.elseframe.com {
-    reverse_proxy hair:3000
-}
-
-contractor.elseframe.com {
-
-    @robots path /robots.txt
-    respond @robots "User-agent: *\nDisallow: /\n" 200
-
-    header {
-        X-Robots-Tag "noindex, nofollow, noarchive"
-    }
-
-    # Auth endpoints go to FastAPI
-    handle /auth/* {
-        reverse_proxy contractor:8502
-    }
-
-    # Everything else goes to Streamlit
-    handle {
-        reverse_proxy contractor:8501
-    }
-}
