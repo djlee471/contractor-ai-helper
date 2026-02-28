@@ -52,16 +52,29 @@ async def login_form(error: str = ""):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>NextStep Login</title>
+        <title>NextStep</title>
         <style>
-            body {{ font-family: sans-serif; max-width: 400px; margin: 100px auto; padding: 0 20px; }}
-            input {{ width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; font-size: 1rem; }}
-            button {{ width: 100%; padding: 10px; background: #420741; color: white; border: none; font-size: 1rem; cursor: pointer; }}
+            @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap');
+            
+            body {{
+                font-family: "Manrope", sans-serif;
+                background-color: #FAFAFA;
+                max-width: 400px;
+                margin: 100px auto;
+                padding: 0 20px;
+            }}
+            .brand {{ font-size: 0.85rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }}
+            h2 {{ font-size: 1.6rem; font-weight: 700; color: #420741; margin-bottom: 0.5rem; }}
+            p {{ color: #64748B; font-size: 0.95rem; margin-bottom: 1.75rem; }}
+            input {{ width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-family: "Manrope", sans-serif; font-size: 0.95rem; box-sizing: border-box; }}
+            button {{ width: 100%; padding: 10px; background: #420741; color: white; border: none; border-radius: 8px; font-family: "Manrope", sans-serif; font-size: 0.95rem; font-weight: 600; cursor: pointer; }}
             button:hover {{ background: #5a0a58; }}
+            .error {{ color: #DC2626; font-size: 0.875rem; margin-bottom: 1rem; }}
         </style>
     </head>
     <body>
-        <h2>NextStep</h2>
+        <div class="brand">NextStep</div>
+        <h2>Welcome back</h2>
         <p>Enter the access code provided by your contractor.</p>
         {error_html}
         <form method="POST" action="/auth/login">
@@ -71,7 +84,6 @@ async def login_form(error: str = ""):
     </body>
     </html>
     """
-
 
 @app.post("/auth/login")
 async def do_login(request: Request):

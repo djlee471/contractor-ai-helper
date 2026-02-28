@@ -17,7 +17,6 @@ import time
 from datetime import datetime, timedelta, timezone
 import secrets
 import psycopg
-from streamlit_cookies_controller import CookieController
 
 from access_codes import compute_hmac, normalize_access_code
 
@@ -663,50 +662,18 @@ def _create_session(contractor_id: int) -> tuple[str, datetime]:
             _ = cur.fetchone()
     return token, expires_at
 
-def _cookie_mgr():
-    # Must NOT be cached in session_state — needs to render every run
-    return CookieController(key="ns_cookie_manager")
-
 def _get_cookie_token() -> str | None:
     # Native read — no component, no race condition
     val = st.context.cookies.get(COOKIE_NAME)
     return val if isinstance(val, str) and val.strip() else None
 
-def _set_cookie_token(token: str, expires_at: datetime):
-    try:
-        ctrl = CookieController(key="ns_cookie_writer")
-        ctrl.set(
-            COOKIE_NAME,
-            token,
-            max_age=SESSION_DAYS * 24 * 60 * 60,
-            secure=True,
-            same_site="lax",
-            path="/",
-        )
-        print(f"[COOKIE] set() called successfully")
-    except Exception as e:
-        print(f"[COOKIE] set() failed: {e}")
-
-def _clear_cookie_token():
-    CookieController(key="ns_cookie_writer").remove(COOKIE_NAME)
-
 def require_auth() -> int | None:
     token = _get_cookie_token()
-
-    # One-rerun bridge: cookie not in browser yet right after login
-    if not token:
-        token = st.session_state.get("_last_valid_session_token")
-
     if not token:
         return None
-
     contractor_id = _validate_session(token)
     if not contractor_id:
-        _clear_cookie_token()
-        st.session_state.pop("_last_valid_session_token", None)
         return None
-
-    st.session_state["_last_valid_session_token"] = token
     return contractor_id
 
 def render_login_screen():
