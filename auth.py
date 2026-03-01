@@ -52,7 +52,7 @@ async def login_form(error: str = ""):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>NextStep</title>
+        <title>Build Answers</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap');
             
@@ -72,7 +72,7 @@ async def login_form(error: str = ""):
         </style>
     </head>
     <body>
-        <h2>NextStep</h2>
+        <h2>Build Answers</h2>
         <p>Enter the access code provided by your contractor.</p>
         {error_html}
         <form method="POST" action="/auth/login">
