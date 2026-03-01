@@ -112,7 +112,7 @@ h2, h3 {
     line-height: 1.12;
     letter-spacing: -0.02em;
     color: #420741ff;
-    margin-bottom: 0.7rem;
+    margin-bottom: 0.6rem;
 }
 
 .hero-subtitle {
@@ -121,8 +121,7 @@ h2, h3 {
     font-weight: 700;
     letter-spacing: -0.01em;
     color: #475569;   /* slate-600 */
-    margin-bottom: 0.25rem;
-    padding-left: 0.08em;
+    margin-bottom: 0.3rem;
 }
 
 
