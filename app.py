@@ -106,19 +106,19 @@ h2, h3 {
 }
       
 .hero-title {
-    font-family: 'Cabinet Grotesk', sans-serif !important;
+    font-family: 'Inter', sans-serif !important;
     font-size: 2.2rem;
-    font-weight: 650;
-    line-height: 1.15;
+    font-weight: 700;
+    line-height: 1.12;
     letter-spacing: -0.02em;
     color: #420741ff;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.7rem;
 }
 
 .hero-subtitle {
-    font-family: "Manrope", sans-serif !important;
+    font-family: "Inter", sans-serif !important;
     font-size: 1.1rem;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.01em;
     color: #475569;   /* slate-600 */
     margin-bottom: 0.25rem;
