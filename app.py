@@ -35,8 +35,8 @@ load_dotenv()
 # Streamlit config
 # ======================
 st.set_page_config(
-    page_title="NextStep Home",
-    page_icon="🛠️",
+    page_title="Build Answers",
+    page_icon="icon.png",
     layout="wide",
 )
 
