@@ -566,6 +566,43 @@ samp {
 """, unsafe_allow_html=True)
 
 
+
+#====================================
+# FOR LOGGING USAGE IN POSTGRES
+#====================================
+INTRO_CHATBOT = "intro_chatbot"
+ESTIMATE_EXPLAINER = "estimate_explainer"
+RENOVATION_PLAN = "renovation_plan"
+DESIGN_HELPER = "design_helper"
+
+def log_event(event_type: str, metadata: dict | None = None):
+    try:
+        contractor_id = st.session_state.get("contractor_id")
+        session_id = st.session_state.get("session_id")
+
+        # Only log if session info exists
+        if not contractor_id or not session_id:
+            return
+
+        conn = psycopg.connect(os.getenv("DATABASE_URL"))
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO usage_events (contractor_id, session_id, event_type, metadata)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (contractor_id, session_id, event_type, metadata or {})
+            )
+
+        conn.commit()
+        conn.close()
+
+    except Exception as e:
+        # Never break the app if logging fails
+        print("Usage logging error:", e)
+
+
 # ==========================================================
 # Auth + DB helpers
 # ==========================================================
@@ -632,9 +669,13 @@ def _validate_session(session_token: str) -> int | None:
             cur.execute(q, (session_token,))
             row = cur.fetchone()
             if not row:
+                st.session_state.pop("session_id", None)
                 return None
 
             session_id, contractor_id = row
+
+            # Store validated session id for usage logging
+            st.session_state["session_id"] = int(session_id)
 
             # Optional hygiene update (consider throttling later)
             cur.execute(
@@ -1667,6 +1708,8 @@ def estimate_explainer_tab(preferred_lang: Dict):
             st.warning("Please upload at least one estimate (PDF).")
             return
         
+        log_event("ai_request", {"helper": ESTIMATE_EXPLAINER})
+        
         # STATUS UPDATE WHILE BUILDING EXPLANATION
         status_box = st.empty()
         progress_bar = st.progress(0)
@@ -1969,6 +2012,8 @@ CRITICAL RULE:
             st.session_state["estimate_translated"] = translated_answer
             st.session_state["estimate_extra_notes"] = extra_notes
 
+            log_event("ai_success", {"helper": ESTIMATE_EXPLAINER, "model": EXPLAIN_MODEL})
+
 
             # =========================
             # DEBUG OUTPUT (AFTER RUN)
@@ -2157,6 +2202,7 @@ CRITICAL RULE:
                         "Please re-upload and run **Explain my estimate** again."
                     )
                 else:
+                    log_event("ai_request", {"helper": ESTIMATE_EXPLAINER, "action": "followup"})
                     with st.spinner("Generating follow-up explanation..."):
                         follow_system = build_estimate_system_prompt() + """
 
@@ -2242,6 +2288,8 @@ CRITICAL RULE:
                         "question": follow_q,
                         "answer": follow_en
                     })
+
+                    log_event("ai_success", {"helper": ESTIMATE_EXPLAINER, "action": "followup", "model": EXPLAIN_MODEL})
 
                     # Display follow-up
                     st.markdown("##### Follow-up answer")
@@ -2432,6 +2480,8 @@ def renovation_plan_tab(preferred_lang: Dict):
         if not rooms or not work_types:
             st.warning("Please add at least one room and one type of work so I can tailor the overview.")
             return
+        
+        log_event("ai_request", {"helper": RENOVATION_PLAN})
     
         with st.spinner("Putting together a typical sequence..."):
 
@@ -2539,7 +2589,7 @@ EXTRA NOTES:
 
             # NEW: Store for follow-ups
             st.session_state["renovation_explanation_en"] = english_answer
-            st.session_state["renovation_translated"] = translated_answer
+            st.session_state["renovation_translated"] = translated_answer         
             st.session_state["renovation_inputs"] = {
                 "rooms": rooms,
                 "other_rooms": other_rooms,
@@ -2549,6 +2599,9 @@ EXTRA NOTES:
                 "contractor_sequence": contractor_sequence,
                 "extra_notes": extra_notes,
             }
+
+            log_event("ai_success", {"helper": RENOVATION_PLAN, "model": EXPLAIN_MODEL})
+
 
     # MOVE display code HERE - outside button block
 
@@ -2668,6 +2721,7 @@ EXTRA NOTES:
                 if not prev_expl:
                     st.warning("Please generate a plan first.")
                 else:
+                    log_event("ai_request", {"helper": RENOVATION_PLAN, "action": "followup"})
                     with st.spinner("Thinking about your follow-up question..."):
                         follow_system = build_renovation_system_prompt() + """
 
@@ -2711,6 +2765,8 @@ USER'S FOLLOW-UP QUESTION:
                         "question": follow_q_reno,
                         "answer": follow_en
                     })
+
+                    log_event("ai_success", {"helper": RENOVATION_PLAN, "action": "followup", "model": EXPLAIN_MODEL})
 
                     # Display (keep inside the "generated follow-up" path)
                     st.markdown("##### Follow-up answer")
@@ -2938,6 +2994,8 @@ def design_helper_tab(preferred_lang: Dict):
         if not room or not materials or not style_pref or not contrast_pref:
             st.warning("Please select a room, at least one material, a style preference, and a contrast preference so I can provide some suggestions.")
             return
+        
+        log_event("ai_request", {"helper": DESIGN_HELPER})
 
         with st.spinner("Thinking through some options..."):
             photo_names = [p.name for p in photos] if photos else []
@@ -2990,6 +3048,8 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
                 "contractor_design_notes": contractor_design_notes,
                 "extra_notes": extra_notes,
             }
+
+            log_event("ai_success", {"helper": DESIGN_HELPER, "model": EXPLAIN_MODEL})
 
 # MOVE display code HERE - outside button block
     if "design_explanation_en" in st.session_state and st.session_state["design_explanation_en"]:
@@ -3100,6 +3160,7 @@ PHOTOS UPLOADED (names only; AI does not see the images in this version):
                 if not prev_expl:
                     st.warning("Please generate design suggestions first.")
                 else:
+                    log_event("ai_request", {"helper": DESIGN_HELPER, "action": "followup"})
                     with st.spinner("Thinking about your follow-up question..."):
                         follow_system = build_design_system_prompt() + """
 
@@ -3146,6 +3207,8 @@ USER'S FOLLOW-UP QUESTION:
                         "answer": follow_en
                     })
 
+                    log_event("ai_success", {"helper": DESIGN_HELPER, "action": "followup", "model": EXPLAIN_MODEL})
+
                     # Display (keep inside the "generated follow-up" path)
                     st.markdown("##### Follow-up answer")
                     st.markdown(follow_en)
@@ -3189,6 +3252,11 @@ def main():
         return
 
     st.session_state["contractor_id"] = contractor_id
+
+    # Log visit once per session
+    if "visit_logged" not in st.session_state:
+        log_event("app_visit", {})
+        st.session_state["visit_logged"] = True
 
     # Row 1: Header
     header_left, header_right = st.columns([4, 1], vertical_alignment="top")
@@ -3360,6 +3428,8 @@ def main():
             st.session_state.home_messages.append({"role": "user", "content": user_text})
             st.session_state.home_turn_count += 1
 
+            log_event("ai_request", {"helper": INTRO_CHATBOT})
+
             with spinner_slot:
                 with st.spinner("Thinking..."):
                     system_prompt = build_home_assistant_system_prompt()
@@ -3408,6 +3478,7 @@ def main():
             spinner_slot.empty()  # optional: collapses slot immediately (before rerun)
 
             st.session_state.home_messages.append({"role": "assistant", "content": assistant_text})
+            log_event("ai_success", {"helper": INTRO_CHATBOT, "model": BUCKET_MODEL})
             st.rerun()
 
 
