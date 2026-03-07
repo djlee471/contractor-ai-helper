@@ -584,24 +584,19 @@ def log_event(event_type: str, metadata: dict | None = None):
         if not contractor_id or not session_id:
             return
 
-        conn = psycopg.connect(os.getenv("DATABASE_URL"))
-
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO usage_events (contractor_id, session_id, event_type, metadata)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (contractor_id, session_id, event_type, metadata or {})
-            )
-
-        conn.commit()
-        conn.close()
+        with _db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO usage_events (contractor_id, session_id, event_type, metadata)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (contractor_id, session_id, event_type, metadata or {})
+                )
 
     except Exception as e:
         # Never break the app if logging fails
-        print("Usage logging error:", e)
-
+        print(f"Usage logging error for {event_type}: {e}")
 
 # ==========================================================
 # Auth + DB helpers
