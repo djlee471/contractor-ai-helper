@@ -6,6 +6,8 @@ from openai import OpenAI
 from dotenv import load_dotenv   # for local .env support
 import base64
 
+import json
+
 # for exporting pdfs
 from fpdf import FPDF
 import urllib.parse
@@ -575,12 +577,12 @@ ESTIMATE_EXPLAINER = "estimate_explainer"
 RENOVATION_PLAN = "renovation_plan"
 DESIGN_HELPER = "design_helper"
 
+
 def log_event(event_type: str, metadata: dict | None = None):
     try:
         contractor_id = st.session_state.get("contractor_id")
         session_id = st.session_state.get("session_id")
 
-        # Only log if session info exists
         if not contractor_id or not session_id:
             return
 
@@ -591,11 +593,15 @@ def log_event(event_type: str, metadata: dict | None = None):
                     INSERT INTO usage_events (contractor_id, session_id, event_type, metadata)
                     VALUES (%s, %s, %s, %s)
                     """,
-                    (contractor_id, session_id, event_type, metadata or {})
+                    (
+                        contractor_id,
+                        session_id,
+                        event_type,
+                        psycopg.types.json.Jsonb(metadata or {}),  # ← fix
+                    )
                 )
 
     except Exception as e:
-        # Never break the app if logging fails
         print(f"Usage logging error for {event_type}: {e}")
 
 # ==========================================================
