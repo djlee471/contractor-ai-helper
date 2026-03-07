@@ -36,7 +36,7 @@ load_dotenv()
 # ======================
 st.set_page_config(
     page_title="Build Answers",
-    page_icon="icon.png",
+    page_icon="icon32.png",
     layout="wide",
 )
 
